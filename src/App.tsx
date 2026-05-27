@@ -1626,14 +1626,8 @@ export default function App() {
   const [newsletterEmail, setNewsletterEmail] = useState<string>("");
   const [newsletterSubscribed, setNewsletterSubscribed] = useState<boolean>(false);
   
-  // Developer Dashboard options
-  const [showDevPanel, setShowDevPanel] = useState<boolean>(false);
-  const [activeDevTab, setActiveDevTab] = useState<"prisma" | "express" | "sim-db" | "auth" | "ads" | "chat" | "frontend">("prisma");
-  const [activeAuthSubTab, setActiveAuthSubTab] = useState<"middleware" | "controller" | "routes">("middleware");
-  const [activeAdsSubTab, setActiveAdsSubTab] = useState<"controller" | "routes">("controller");
-  const [activeChatSubTab, setActiveChatSubTab] = useState<"controller" | "routes">("controller");
-  const [activeFrontSubTab, setActiveFrontSubTab] = useState<"api" | "auth-context" | "navbar" | "home" | "supabase" | "ad-detail" | "chat" | "anunciar">("api");
-  const [copiedFile, setCopiedFile] = useState<string | null>(null);
+  // Chat modal state
+  const [showChatModal, setShowChatModal] = useState<boolean>(false);
 
   // Active details / modal states
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -1655,14 +1649,7 @@ export default function App() {
     imagePreset: "https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht"
   });
 
-  // Action helpers
-  const handleCopyCode = (filename: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedFile(filename);
-    setTimeout(() => {
-      setCopiedFile(null);
-    }, 2000);
-  };
+
 
   const handleCreateAd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1804,8 +1791,7 @@ export default function App() {
     if (existingChat) {
       setActiveChatId(existingChat.id);
       setSelectedProduct(null);
-      setShowDevPanel(true);
-      setActiveDevTab("sim-db");
+      setShowChatModal(true);
     } else {
       // Create new chat session conforming to database schemas
       const newChatId = `chat-${Date.now()}`;
@@ -1820,8 +1806,7 @@ export default function App() {
       setChats([...chats, newChatRecord]);
       setActiveChatId(newChatId);
       setSelectedProduct(null);
-      setShowDevPanel(true);
-      setActiveDevTab("sim-db");
+      setShowChatModal(true);
 
       // Add starter greeting text
       const starterMsg: Message = {
@@ -1856,37 +1841,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 transition-colors duration-300">
       
-      {/* Dev Utility Bar (Highlights Backend configuration to satisfy instructions) */}
-      <div className="bg-[#141b2b] text-white py-2 px-4 flex items-center justify-between text-xs sm:px-8 border-b border-white/10 z-[60]">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span className="font-medium tracking-wide">AMB_DESENVOLVIMENTO: Node.js + Prisma (PostgreSQL)</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => { setShowDevPanel(true); setActiveDevTab("prisma"); }}
-            className="bg-primary hover:bg-blue-600 px-3 py-1 rounded-full text-white font-medium flex items-center gap-1 transition"
-          >
-            <Database className="w-3.5 h-3.5" />
-            <span>Ver schema.prisma</span>
-          </button>
-          <button 
-            onClick={() => { setShowDevPanel(true); setActiveDevTab("express"); }}
-            className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded-full text-white font-medium flex items-center gap-1 transition hidden sm:flex"
-          >
-            <Server className="w-3.5 h-3.5" />
-            <span>Server.ts (API)</span>
-          </button>
-          <button 
-            onClick={() => { setShowDevPanel(true); setActiveDevTab("sim-db"); }}
-            className="bg-[#2563eb] hover:bg-blue-500 px-3 py-1 rounded-full text-white font-medium flex items-center gap-1 transition"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">Banco Simulado</span>
-            <span className="xs:hidden">Simulador</span>
-          </button>
-        </div>
-      </div>
+
 
       {/* Main TopNavBar */}
       <nav id="top-nav" className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm transition-all">
@@ -1920,8 +1875,8 @@ export default function App() {
             </button>
 
             <button 
-              onClick={() => { setShowDevPanel(true); setActiveDevTab("sim-db"); }}
-              className="border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-lg font-semibold text-sm transition flex items-center gap-1.5"
+              onClick={() => { setShowChatModal(true); if (chats.length > 0 && !activeChatId) setActiveChatId(chats[0].id); }}
+              className="border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-lg font-semibold text-sm transition flex items-center gap-1.5 cursor-pointer"
             >
               <MessageSquare className="w-4.5 h-4.5 text-[#2563eb]" />
               <span className="hidden lg:inline">Chats de Negociação</span>
@@ -1933,7 +1888,7 @@ export default function App() {
             <div className="flex gap-1 ml-1">
               <div 
                 className="p-2 hover:bg-slate-100 rounded-full cursor-pointer relative"
-                onClick={() => { setShowDevPanel(true); setActiveDevTab("sim-db"); }}
+                onClick={() => { setShowChatModal(true); if (chats.length > 0 && !activeChatId) setActiveChatId(chats[0].id); }}
               >
                 <ShoppingCart className="w-5 h-5 text-slate-600" />
                 <span className="absolute top-1 right-1 bg-[#2563eb] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
@@ -1942,7 +1897,7 @@ export default function App() {
               </div>
               <div 
                 className="p-2 hover:bg-slate-100 rounded-full cursor-pointer"
-                onClick={() => { setShowDevPanel(true); setActiveDevTab("sim-db"); }}
+                onClick={() => { setShowChatModal(true); if (chats.length > 0 && !activeChatId) setActiveChatId(chats[0].id); }}
               >
                 <UserIcon className="w-5 h-5 text-slate-600" />
               </div>
@@ -2456,702 +2411,102 @@ export default function App() {
         </div>
       )}
 
-      {/* Developer Side-Drawer / Config Panel (The crucial interactive engine) */}
-      {showDevPanel && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex justify-end">
-          <div className="bg-white w-full max-w-2xl h-screen shadow-2xl flex flex-col transform animate-in slide-in-from-right duration-250 border-l border-slate-200">
+      
+      {/* Dynamic Negotiation Chat Modal */}
+      {showChatModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl h-[550px] shadow-2xl border border-slate-200 flex flex-col transform animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header */}
-            <div className="bg-[#141b2b] text-white p-5 flex items-center justify-between border-b border-slate-800">
+            <div className="bg-[#2563eb] text-white p-4 flex items-center justify-between rounded-t-2xl">
               <div className="flex items-center gap-2">
-                <Terminal className="text-blue-400 w-5 h-5 animate-pulse" />
+                <MessageSquare className="w-5 h-5" />
                 <div>
-                  <h3 className="font-title font-bold text-base leading-tight">Módulo de Controle do Back-end</h3>
-                  <p className="text-[11px] text-slate-400 font-mono tracking-tight">ElectroMarket Boilerplate Tools v1.0.0</p>
+                  <h3 className="font-title font-bold text-base leading-tight">Chat de Negociação</h3>
+                  <p className="text-[11px] text-blue-105 font-medium">Converse diretamente com o vendedor</p>
                 </div>
               </div>
               <button 
-                onClick={() => setShowDevPanel(false)}
-                className="text-slate-400 hover:text-white p-1.5 hover:bg-slate-800 rounded"
+                onClick={() => setShowChatModal(false)}
+                className="text-white hover:bg-white/10 p-1.5 rounded-full transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Sub-navigation Tabs */}
-            <div className="bg-slate-100 border-b border-slate-200 px-4 flex gap-1 pt-2">
-              <button
-                onClick={() => setActiveDevTab("prisma")}
-                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
-                  activeDevTab === "prisma" 
-                  ? "border-[#2563eb] text-[#2563eb]" 
-                  : "border-transparent text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                <Database className="w-4 h-4" />
-                <span>schema.prisma</span>
-              </button>
-              <button
-                onClick={() => setActiveDevTab("express")}
-                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
-                  activeDevTab === "express" 
-                  ? "border-[#2563eb] text-[#2563eb]" 
-                  : "border-transparent text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                <Server className="w-4 h-4" />
-                <span>Express Server.ts</span>
-              </button>
-              <button
-                onClick={() => setActiveDevTab("auth")}
-                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
-                  activeDevTab === "auth" 
-                  ? "border-[#2563eb] text-[#2563eb]" 
-                  : "border-transparent text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                <Lock className="w-4 h-4 text-amber-500" />
-                <span>Autenticação JWT</span>
-              </button>
-              <button
-                onClick={() => setActiveDevTab("ads")}
-                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
-                  activeDevTab === "ads" 
-                  ? "border-[#2563eb] text-[#2563eb]" 
-                  : "border-transparent text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                <Package className="w-4 h-4 text-pink-500" />
-                <span>Anúncios CRUD</span>
-              </button>
-              <button
-                onClick={() => setActiveDevTab("chat")}
-                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
-                  activeDevTab === "chat" 
-                  ? "border-[#2563eb] text-[#2563eb]" 
-                  : "border-transparent text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                <MessageSquare className="w-4 h-4 text-teal-500" />
-                <span>Chat Socket.io</span>
-              </button>
-              <button
-                onClick={() => setActiveDevTab("frontend")}
-                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
-                  activeDevTab === "frontend" 
-                  ? "border-[#2563eb] text-[#2563eb]" 
-                  : "border-transparent text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                <FileCode className="w-4 h-4 text-blue-500" />
-                <span>Front-end HTTP & Context</span>
-              </button>
-              <button
-                onClick={() => setActiveDevTab("sim-db")}
-                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition relative ${
-                  activeDevTab === "sim-db" 
-                  ? "border-[#2563eb] text-[#2563eb]" 
-                  : "border-transparent text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                <Database className="w-4 h-4 text-emerald-600" />
-                <span>Simulador de Dados</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-ping absolute top-2 right-2"></span>
-              </button>
-            </div>
+            {/* Chat Body */}
+            <div className="flex-1 flex flex-col min-h-0 bg-slate-50">
+              <div className="bg-slate-100 p-3 border-b border-slate-200 flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Canal de Chat Ativo</span>
+                <select 
+                  value={activeChatId || ""}
+                  onChange={(e) => setActiveChatId(e.target.value || null)}
+                  className="text-xs bg-white border border-slate-300 rounded px-2.5 py-1.5 outline-none font-semibold text-slate-700 cursor-pointer"
+                >
+                  {chats.map(chat => {
+                    const buyerObj = users.find(u => u.id === chat.buyerId);
+                    const prodObj = products.find(p => p.id === chat.productId);
+                    return (
+                      <option key={chat.id} value={chat.id}>
+                        {buyerObj?.name || 'Comprador'} - {prodObj?.title || 'Produto'}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
 
-            {/* Tab Contents */}
-            <div className="flex-1 overflow-y-auto p-5 font-sans">
-              
-              {/* Prisma Schema Tab */}
-              {activeDevTab === "prisma" && (
-                <div className="flex flex-col h-full gap-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="bg-blue-100 text-[#004ac6] text-[10px] font-bold px-2 py-1 rounded">PRINTER_SCHEMA</span>
-                      <h4 className="text-sm font-bold text-slate-800 mt-1">Definições PostgreSQL com Prisma ORM</h4>
-                    </div>
-                    <button 
-                      onClick={() => handleCopyCode("schema", SCHEMA_PRISMA_CODE)}
-                      className="bg-slate-100 hover:bg-slate-250 text-slate-700 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
-                    >
-                      {copiedFile === "schema" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedFile === "schema" ? "Copiado!" : "Copiar schema.prisma"}</span>
-                    </button>
-                  </div>
-
-                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-150">
-                    O arquivo <code>schema.prisma</code> localizado em <code>/backend/prisma/schema.prisma</code> foi configurado com 
-                    as tabelas <strong>User</strong>, <strong>Product (Ad)</strong>, <strong>Chat</strong> e <strong>Message</strong>. 
-                    Ele estabelece relações robustas com restrições de exclusão em cascata (<i>onDelete: Cascade</i>) garantindo a integridade dos dados no banco PostgreSQL.
-                  </p>
-
-                  <div className="bg-slate-950 rounded-xl overflow-hidden shadow-inner flex-1 flex flex-col font-mono text-xs text-slate-300 relative border border-slate-800">
-                    <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800">
-                      <span>schema.prisma</span>
-                      <span>Prisma DSL - PostgreSQL</span>
-                    </div>
-                    <pre className="p-4 overflow-auto flex-1 select-all h-[400px]">
-                      {SCHEMA_PRISMA_CODE}
-                    </pre>
-                  </div>
-                </div>
-              )}
-
-              {/* Express Server Configuration Tab */}
-              {activeDevTab === "express" && (
-                <div className="flex flex-col h-full gap-4 animate-in fade-in duration-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-1 rounded">EXPRESS_BOOT</span>
-                      <h4 className="text-sm font-bold text-slate-800 mt-1">Servidor TypeScript & Dependências</h4>
-                    </div>
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => handleCopyCode("server", SERVER_TS_CODE)}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1 transition active:scale-95"
-                      >
-                        {copiedFile === "server" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>server.ts</span>
-                      </button>
-                      <button 
-                        onClick={() => handleCopyCode("pkg", PACKAGE_JSON_CODE)}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1 transition active:scale-95"
-                      >
-                        {copiedFile === "pkg" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>package.json</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-1">
-                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 text-xs">
-                      <strong className="text-slate-800 block mb-0.5">Middlewares Ativos:</strong>
-                      <ul className="list-disc pl-4 text-slate-500 space-y-0.5">
-                        <li><code>cors()</code> para permitir requisições de outras origens.</li>
-                        <li><code>express.json()</code> para interpretar payloads JSON.</li>
-                      </ul>
-                    </div>
-                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 text-xs">
-                      <strong className="text-slate-800 block mb-0.5">Dependências do Back-end:</strong>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {["express", "prisma", "typescript", "dotenv", "cors", "bcrypt", "jsonwebtoken"].map(dep => (
-                          <span key={dep} className="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded text-[10px] font-mono">
-                            {dep}
+              {/* Message Box */}
+              <div className="flex-grow p-4 overflow-y-auto space-y-4 bg-white min-h-0 animate-in fade-in duration-200">
+                {activeChatId ? (
+                  messages.filter(m => m.chatId === activeChatId).map(msg => {
+                    const isMe = msg.senderId === "user-buyer-1"; // My profile (Carol Santos)
+                    const senderObj = users.find(u => u.id === msg.senderId);
+                    return (
+                      <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] rounded-paragraph p-3.5 text-xs shadow-sm ${
+                          isMe 
+                          ? 'bg-[#2563eb] text-white rounded-br-none rounded-2xl' 
+                          : 'bg-slate-100 text-slate-800 rounded-bl-none rounded-2xl border border-slate-200'
+                        }`}>
+                          <div className="font-bold mb-0.5 text-[10px] opacity-80 flex items-center gap-1">
+                            <span>{senderObj?.name || 'Usuário'}</span>
+                            {isMe && <span className="bg-blue-800 text-white text-[8px] px-1 rounded">Você</span>}
+                          </div>
+                          <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                          <span className="text-[8px] opacity-60 block text-right mt-1 font-mono">
+                            {new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                           </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-950 rounded-xl overflow-hidden flex-1 flex flex-col font-mono text-xs text-slate-300 relative border border-slate-800 h-[300px]">
-                    <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800">
-                      <span>/backend/server.ts</span>
-                      <span>TypeScript + Express</span>
-                    </div>
-                    <pre className="p-4 overflow-auto flex-1 select-all">
-                      {SERVER_TS_CODE}
-                    </pre>
-                  </div>
-                </div>
-              )}
-
-              {/* JWT Auth Tab */}
-              {activeDevTab === "auth" && (
-                <div className="flex flex-col h-full gap-4 animate-in fade-in duration-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="bg-amber-100 text-[#b25e00] text-[10px] font-bold px-2 py-1 rounded">AUTH_JWT_MODULE</span>
-                      <h4 className="text-sm font-bold text-slate-800 mt-1">Fluxo de Registro & Login com Criptografia Bcrypt e JWT</h4>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-150">
-                    Implementamos a autenticação completa com criptografia e tokens. Veja as camadas geradas em <strong className="text-slate-700">/backend</strong>:
-                  </p>
-
-                  {/* Auth SubTabs switcher */}
-                  <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                    {[
-                      { id: "middleware", label: "authMiddleware.ts" },
-                      { id: "controller", label: "authController.ts" },
-                      { id: "routes", label: "authRoutes.ts" }
-                    ].map(sub => (
-                      <button
-                        key={sub.id}
-                        type="button"
-                        onClick={() => setActiveAuthSubTab(sub.id as any)}
-                        className={`flex-1 text-center py-1.5 px-2.5 text-xs font-semibold rounded-md transition ${
-                          activeAuthSubTab === sub.id 
-                          ? "bg-white text-slate-900 shadow-sm" 
-                          : "text-slate-500 hover:text-slate-800"
-                        }`}
-                      >
-                        {sub.id === "middleware" ? "1. Middleware" : sub.id === "controller" ? "2. Controller" : "3. Routes"}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Content viewer */}
-                  {(() => {
-                    const activeSub = [
-                      { id: "middleware", title: "Middleware de Verificação JWT", file: "authMiddleware.ts", path: "/backend/src/middlewares/authMiddleware.ts", code: AUTH_MIDDLEWARE_CODE, desc: "Valida o JWT recebido no cabeçalho Authorization (Bearer <token>), extrai o userId e injeta-o no fluxo do Express para proteger ações de usuários registrados." },
-                      { id: "controller", title: "Controlador de Autenticação", file: "authController.ts", path: "/backend/src/controllers/authController.ts", code: AUTH_CONTROLLER_CODE, desc: "Contém a lógica de registro (criptografando senhas com Bcrypt e salvando no Postgres através do Prisma) e login (verificando o email, validando a hash da senha e gerando e assinando os Tokens JWT válidos por 7 dias)." },
-                      { id: "routes", title: "Roteador do Express", file: "authRoutes.ts", path: "/backend/src/routes/authRoutes.ts", code: AUTH_ROUTES_CODE, desc: "Mapeia as requisições HTTP POST para /register e /login aos seus respectivos tratadores do controlador." }
-                    ].find(s => s.id === activeAuthSubTab);
-
-                    if (!activeSub) return null;
-
-                    return (
-                      <div className="flex flex-col gap-3 flex-1">
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs">
-                            <span className="font-bold text-slate-800">{activeSub.title}</span>
-                            <code className="block text-[10px] text-slate-400 font-mono mt-0.5">{activeSub.path}</code>
-                          </div>
-                          <button 
-                            onClick={() => handleCopyCode(activeSub.id, activeSub.code)}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
-                          >
-                            {copiedFile === activeSub.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedFile === activeSub.id ? "Copiado!" : "Copiar Código"}</span>
-                          </button>
-                        </div>
-
-                        <p className="text-[11px] text-slate-600 leading-normal bg-amber-50/50 p-2.5 rounded-lg border border-amber-100 font-sans">
-                          {activeSub.desc}
-                        </p>
-
-                        <div className="bg-slate-950 rounded-xl overflow-hidden shadow-inner flex-1 flex flex-col font-mono text-[11px] text-slate-300 relative border border-slate-800">
-                          <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800 border-t-0">
-                            <span>{activeSub.file}</span>
-                            <span>TypeScript</span>
-                          </div>
-                          <pre className="p-4 overflow-auto flex-1 select-all h-[320px]">
-                            {activeSub.code}
-                          </pre>
                         </div>
                       </div>
                     );
-                  })()}
-                </div>
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12 text-sm gap-2">
+                    <MessageSquare className="w-10 h-10 text-slate-300" />
+                    <span>Nenhum chat de negociação ativo.</span>
+                    <span className="text-xs text-slate-400 max-w-xs text-center font-normal">Selecione um produto no catálogo e clique em "Negociar no Chat" para iniciar uma conversa direta com o vendedor!</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Input form */}
+              {activeChatId && (
+                <form onSubmit={handleSendMessage} className="p-3 bg-slate-50 border-t border-slate-200 flex gap-2 rounded-b-2xl">
+                  <input 
+                    type="text" 
+                    placeholder="Digite sua mensagem de negociação ou proposta..."
+                    value={typedMessage}
+                    onChange={(e) => setTypedMessage(e.target.value)}
+                    className="flex-grow px-4 py-2 border border-slate-300 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]/25 focus:border-[#2563eb] transition-all"
+                  />
+                  <button type="submit" className="bg-[#2563eb] text-white p-2 px-4 rounded-xl hover:bg-blue-700 transition font-bold text-sm flex items-center gap-1.5 shadow-md active:scale-95 duration-100 cursor-pointer">
+                    <Send className="w-4 h-4" />
+                    <span>Enviar</span>
+                  </button>
+                </form>
               )}
-
-              {/* Ads CRUD Tab */}
-              {activeDevTab === "ads" && (
-                <div className="flex flex-col h-full gap-4 animate-in fade-in duration-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="bg-pink-100 text-[#c2185b] text-[10px] font-bold px-2 py-1 rounded">ADS_CRUD_MODULE</span>
-                      <h4 className="text-sm font-bold text-slate-800 mt-1">CRUD Completo de Anúncios de Smartfones & Eletrônicos</h4>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-150">
-                    O back-end possui suporte a operações CRUD inteligentes conectadas ao Prisma ORM em <strong className="text-slate-700">/backend</strong>:
-                  </p>
-
-                  {/* Ads SubTabs switcher */}
-                  <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                    {[
-                      { id: "controller", label: "adController.ts" },
-                      { id: "routes", label: "adRoutes.ts" }
-                    ].map(sub => (
-                      <button
-                        key={sub.id}
-                        type="button"
-                        onClick={() => setActiveAdsSubTab(sub.id as any)}
-                        className={`flex-1 text-center py-1.5 px-2.5 text-xs font-semibold rounded-md transition ${
-                          activeAdsSubTab === sub.id 
-                          ? "bg-white text-slate-900 shadow-sm" 
-                          : "text-slate-500 hover:text-slate-800"
-                        }`}
-                      >
-                        {sub.id === "controller" ? "1. Controller (adController.ts)" : "2. Router (adRoutes.ts)"}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Content viewer */}
-                  {(() => {
-                    const activeSub = [
-                      { id: "controller", title: "Controlador de Anúncios", file: "adController.ts", path: "/backend/src/controllers/adController.ts", code: AD_CONTROLLER_CODE, desc: "Processa requisições para criar (capturando autorização com o userId injetado pelo middleware), listar todos os anúncios com suporte a múltiplos filtros por query params (marca, faixa de preços, armazenamento, etc), buscar por id integrando detalhes do vendedor, atualizar dados se o usuário for o dono e deletar." },
-                      { id: "routes", title: "Roteador do Endpoint de Anúncios", file: "adRoutes.ts", path: "/backend/src/routes/adRoutes.ts", code: AD_ROUTES_CODE, desc: "Mapeia as requisições HTTP correspondentes (GET, POST, PUT, DELETE) e aplica de forma estrita o barramento de segurança com o authMiddleware para operações de escrita ou exclusão." }
-                    ].find(s => s.id === activeAdsSubTab);
-
-                    if (!activeSub) return null;
-
-                    return (
-                      <div className="flex flex-col gap-3 flex-1">
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs">
-                            <span className="font-bold text-slate-800">{activeSub.title}</span>
-                            <code className="block text-[10px] text-slate-400 font-mono mt-0.5">{activeSub.path}</code>
-                          </div>
-                          <button 
-                            onClick={() => handleCopyCode(activeSub.id, activeSub.code)}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
-                          >
-                            {copiedFile === activeSub.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedFile === activeSub.id ? "Copiado!" : "Copiar Código"}</span>
-                          </button>
-                        </div>
-
-                        <p className="text-[11px] text-slate-600 leading-normal bg-pink-50/50 p-2.5 rounded-lg border border-pink-100 font-sans">
-                          {activeSub.desc}
-                        </p>
-
-                        <div className="bg-slate-950 rounded-xl overflow-hidden shadow-inner flex-1 flex flex-col font-mono text-[11px] text-slate-300 relative border border-slate-800">
-                          <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800 border-t-0">
-                            <span>{activeSub.file}</span>
-                            <span>TypeScript</span>
-                          </div>
-                          <pre className="p-4 overflow-auto flex-1 select-all h-[320px]">
-                            {activeSub.code}
-                          </pre>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* Chat Socket.io Tab */}
-              {activeDevTab === "chat" && (
-                <div className="flex flex-col h-full gap-4 animate-in fade-in duration-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="bg-emerald-100 text-[#059669] text-[10px] font-bold px-2 py-1 rounded font-mono">CHAT_SOCKET_IO_MODULE</span>
-                      <h4 className="text-sm font-bold text-slate-800 mt-1">Mensageria em Tempo Real via Sockets (Socket.io) e Prisma</h4>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-150">
-                    O WebSocket estabelece uma conexão persistente e bidirecional em tempo real, gravando instantaneamente as mensagens no PostgreSQL via Prisma:
-                  </p>
-
-                  {/* Chat SubTabs switcher */}
-                  <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                    {[
-                      { id: "controller", label: "chatController.ts" },
-                      { id: "routes", label: "chatRoutes.ts" }
-                    ].map(sub => (
-                      <button
-                        key={sub.id}
-                        type="button"
-                        onClick={() => setActiveChatSubTab(sub.id as any)}
-                        className={`flex-1 text-center py-1.5 px-2.5 text-xs font-semibold rounded-md transition ${
-                          activeChatSubTab === sub.id 
-                          ? "bg-white text-slate-900 shadow-sm" 
-                          : "text-slate-500 hover:text-slate-800"
-                        }`}
-                      >
-                        {sub.id === "controller" ? "1. Controller" : "2. Router"}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Content viewer */}
-                  {(() => {
-                    const activeSub = [
-                      { id: "controller", title: "Controlador de Chat", file: "chatController.ts", path: "/backend/src/controllers/chatController.ts", code: CHAT_CONTROLLER_CODE, desc: "Gerencia a persistência de salas de chat entre compradores e vendedores para um smartphone ou eletrônico específico, bem como retorna o histórico ordenado de mensagens do chat." },
-                      { id: "routes", title: "Rotas de Chat", file: "chatRoutes.ts", path: "/backend/src/routes/chatRoutes.ts", code: CHAT_ROUTES_CODE, desc: "Cria endpoints HTTP de suporte ao WebSocket, garantindo acesso seguro aos chats (getUserChats, getOrCreateChat, getChatMessages) protegidos pelo authMiddleware." }
-                    ].find(s => s.id === activeChatSubTab);
-
-                    if (!activeSub) return null;
-
-                    return (
-                      <div className="flex flex-col gap-3 flex-1">
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs">
-                            <span className="font-bold text-slate-800">{activeSub.title}</span>
-                            <code className="block text-[10px] text-slate-400 font-mono mt-0.5">{activeSub.path}</code>
-                          </div>
-                          <button 
-                            onClick={() => handleCopyCode(activeSub.id, activeSub.code)}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-750 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
-                          >
-                            {copiedFile === activeSub.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedFile === activeSub.id ? "Copiado!" : "Copiar Código"}</span>
-                          </button>
-                        </div>
-
-                        <p className="text-[11px] text-slate-600 leading-normal bg-emerald-50/50 p-2.5 rounded-lg border border-emerald-100 font-sans">
-                          {activeSub.desc}
-                        </p>
-
-                        <div className="bg-slate-950 rounded-xl overflow-hidden shadow-inner flex-1 flex flex-col font-mono text-[11px] text-slate-300 relative border border-slate-800">
-                          <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800 border-t-0">
-                            <span>{activeSub.file}</span>
-                            <span>TypeScript</span>
-                          </div>
-                          <pre className="p-4 overflow-auto flex-1 select-all h-[320px]">
-                            {activeSub.code}
-                          </pre>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* Front-end HTTP & Context Tab */}
-              {activeDevTab === "frontend" && (
-                <div className="flex flex-col h-full gap-4 animate-in fade-in duration-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="bg-blue-100 text-blue-600 text-[10px] font-bold px-2 py-1 rounded font-mono">FRONTEND_INTEGRATION_MODULE</span>
-                      <h4 className="text-sm font-bold text-slate-800 mt-1 font-sans">Conexão HTTP (Axios/Fetch) e Estado de Sessão (AuthContext)</h4>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-150 font-sans">
-                    O front-end conecta-se à API Rest gerenciando o ciclo de vida do Token JWT por localStorage/Cookies, alimentando o estado global do React:
-                  </p>
-
-                  {/* SubTabs switcher */}
-                  <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 overflow-x-auto gap-1">
-                    {[
-                      { id: "api", label: "api.ts" },
-                      { id: "auth-context", label: "AuthContext.tsx" },
-                      { id: "navbar", label: "Navbar.tsx" },
-                      { id: "home", label: "page.tsx" },
-                      { id: "ad-detail", label: "ads/[id]/page.tsx" },
-                      { id: "chat", label: "chat/page.tsx" },
-                      { id: "anunciar", label: "anunciar/page.tsx" },
-                      { id: "supabase", label: "supabase.ts" }
-                    ].map(sub => (
-                      <button
-                        key={sub.id}
-                        type="button"
-                        onClick={() => setActiveFrontSubTab(sub.id as any)}
-                        className={`flex-1 text-center py-1.5 px-2 text-xs font-semibold rounded-md transition whitespace-nowrap ${
-                          activeFrontSubTab === sub.id 
-                          ? "bg-white text-slate-900 shadow-sm" 
-                          : "text-slate-500 hover:text-slate-800"
-                        }`}
-                      >
-                        {sub.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Content viewer */}
-                  {(() => {
-                    const activeSub = [
-                      { id: "api", title: "Instância de Requisição API (Fetch)", file: "api.ts", path: "/src/lib/api.ts", code: FRONT_API_CODE, desc: "Configura a base de requisições enviando automaticamente o cabeçalho Authorization Bearer JWT a cada requisição ao backend." },
-                      { id: "auth-context", title: "Provedor Global de Autenticação", file: "AuthContext.tsx", path: "/src/contexts/AuthContext.tsx", code: FRONT_AUTH_CONTEXT_CODE, desc: "Mantém os dados do usuário conectado, efetuando o Login e Registro contra o back-end, salvando os tokens persistentes de sessão." },
-                      { id: "navbar", title: "Barra de Navegação do Marketplace", file: "Navbar.tsx", path: "/src/components/Navbar.tsx", code: FRONT_NAVBAR_CODE, desc: "Apresenta a logo ElectroMarket, caixa de busca e botões condicionais de acordo com o estado do AuthContext (+Anunciar / Entrar)." },
-                      { id: "home", title: "Vitrine e Filtros da Home", file: "page.tsx", path: "/src/app/page.tsx", code: FRONT_HOME_PAGE_CODE, desc: "A página principal busca os anúncios cadastrados em tempo real, fornecendo filtros por marca/categoria rápida e permitindo pesquisa textual." },
-                      { id: "ad-detail", title: "Detalhes Dinâmicos de Anúncios", file: "page.tsx", path: "/src/app/ads/[id]/page.tsx", code: FRONT_AD_DETAIL_CODE, desc: "A rota dinâmica de detalhes busca as informações completas do aparelho, exibe uma galeria de fotos navegáveis, badges de saúde de bateria e o botão de chat com o vendedor." },
-                      { id: "chat", title: "Tela de Mensagens Real-time", file: "page.tsx", path: "/src/app/chat/page.tsx", code: FRONT_CHAT_CODE, desc: "A tela de chat em tempo real estabelece conexão permanente WebSocket via socket.io-client com o backend, lidando com envio instantâneo e recebimento de mensagens sem reload." },
-                      { id: "anunciar", title: "Formulário de Anúncio de Aparelhos", file: "page.tsx", path: "/src/app/anunciar/page.tsx", code: FRONT_ANUNCIAR_CODE, desc: "Permite que usuários logados cadastrem aparelhos de celular para venda, especificando fotos, preço, marca, saúde de bateria e localização com validações seguras." },
-                      { id: "supabase", title: "Cliente Oficial de Conexão Supabase", file: "supabase.ts", path: "/src/lib/supabase.ts", code: FRONT_SUPABASE_CODE, desc: "A instância do cliente do Supabase para inicialização e consultas em tempo real, integrando perfeitamente tabelas, autenticação integrada e canais de comunicação." }
-                    ].find(s => s.id === activeFrontSubTab);
-
-                    if (!activeSub) return null;
-
-                    return (
-                      <div className="flex flex-col gap-3 flex-1 font-sans">
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs">
-                            <span className="font-bold text-slate-800">{activeSub.title}</span>
-                            <code className="block text-[10px] text-slate-400 font-mono mt-0.5">{activeSub.path}</code>
-                          </div>
-                          <button 
-                            onClick={() => handleCopyCode(activeSub.id, activeSub.code)}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-755 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
-                          >
-                            {copiedFile === activeSub.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedFile === activeSub.id ? "Copiado!" : "Copiar"}</span>
-                          </button>
-                        </div>
-
-                        <p className="text-[11px] text-slate-650 leading-normal bg-blue-50/50 p-2.5 rounded-lg border border-blue-100 font-sans">
-                          {activeSub.desc}
-                        </p>
-
-                        <div className="bg-slate-950 rounded-xl overflow-hidden shadow-inner flex-1 flex flex-col font-mono text-[11px] text-slate-300 relative border border-slate-800">
-                          <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800 border-t-0">
-                            <span>{activeSub.file}</span>
-                            <span>TypeScript</span>
-                          </div>
-                          <pre className="p-4 overflow-auto flex-1 select-all h-[320px]">
-                            {activeSub.code}
-                          </pre>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* Live Sandbox Interactive Simulator Tab */}
-              {activeDevTab === "sim-db" && (
-                <div className="space-y-5 animate-in fade-in duration-100">
-                  <div className="bg-gradient-to-r from-slate-900 to-slate-850 text-white p-4 rounded-xl flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold flex items-center gap-1.5">
-                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                        Simulador de Transações Postgres / Prisma
-                      </h4>
-                      <p className="text-[11px] text-slate-300 mt-1 max-w-sm">
-                        As ações realizadas no marketplace geram comandos representados na árvore relacional de usuários e chats do banco.
-                      </p>
-                    </div>
-                    
-                    <button 
-                      onClick={() => {
-                        setProducts(INITIAL_PRODUCTS);
-                        setChats(INITIAL_CHATS);
-                        setMessages(INITIAL_MESSAGES);
-                        setUsers(INITIAL_USERS);
-                        setActiveChatId("chat-1");
-                      }}
-                      className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded font-semibold flex items-center gap-1"
-                      title="Resetar dados do banco simulado"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Resetar BD</span>
-                    </button>
-                  </div>
-
-                  {/* Chat Section */}
-                  <div className="border border-slate-250 rounded-xl overflow-hidden bg-slate-50 flex flex-col h-[320px]">
-                    <div className="bg-slate-100 p-3 border-b border-slate-200 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <MessageSquare className="w-4.5 h-4.5 text-[#2563eb]" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Canal de Chat Ativo (Table Message)</span>
-                      </div>
-                      <select 
-                        value={activeChatId || ""}
-                        onChange={(e) => setActiveChatId(e.target.value || null)}
-                        className="text-xs bg-white border border-slate-300 rounded px-2 py-1 outline-none font-semibold text-slate-700"
-                      >
-                        {chats.map(chat => {
-                          const buyerObj = users.find(u => u.id === chat.buyerId);
-                          const prodObj = products.find(p => p.id === chat.productId);
-                          return (
-                            <option key={chat.id} value={chat.id}>
-                              {buyerObj?.name || 'Comprador'} - {prodObj?.title || 'Produto'}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-
-                    {/* Message Box */}
-                    <div className="flex-1 p-3 overflow-y-auto space-y-3 bg-white">
-                      {activeChatId ? (
-                        messages.filter(m => m.chatId === activeChatId).map(msg => {
-                          const isMe = msg.senderId === "user-buyer-1"; // My profile (Carol Santos)
-                          const senderObj = users.find(u => u.id === msg.senderId);
-                          return (
-                            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`max-w-[85%] rounded-paragraph p-3 text-xs shadow-sm ${
-                                isMe 
-                                ? 'bg-blue-600 text-white rounded-br-none rounded-2xl' 
-                                : 'bg-slate-100 text-slate-800 rounded-bl-none rounded-2xl border border-slate-200'
-                              }`}>
-                                <div className="font-bold mb-0.5 text-[10px] opacity-80 flex items-center gap-1">
-                                  <span>{senderObj?.name || 'Usuário'}</span>
-                                  {isMe && <span className="bg-blue-800 text-white text-[8px] px-1 rounded">Você (Buyer)</span>}
-                                </div>
-                                <p>{msg.text}</p>
-                                <span className="text-[8px] opacity-60 block text-right mt-1 font-mono">
-                                  {new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="text-center text-slate-400 py-12 text-xs">
-                          Nenhum chat de negociação selecionado. Escolha um produto no marketplace para iniciar a conversa!
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Chat Input form */}
-                    {activeChatId && (
-                      <form onSubmit={handleSendMessage} className="p-2 bg-slate-100 border-t border-slate-200 flex gap-2">
-                        <input 
-                          type="text" 
-                          placeholder="Digite sua proposta..."
-                          value={typedMessage}
-                          onChange={(e) => setTypedMessage(e.target.value)}
-                          className="flex-grow px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white outline-none focus:ring-1 focus:ring-[#2563eb]"
-                        />
-                        <button type="submit" className="bg-[#2563eb] text-white p-1.5 px-3 rounded-lg hover:bg-blue-700 transition">
-                          <Send className="w-3.5 h-3.5" />
-                        </button>
-                      </form>
-                    )}
-                  </div>
-
-                  {/* Schema Inspector */}
-                  <div className="space-y-2">
-                    <h5 className="text-xs font-bold uppercase text-slate-600 flex items-center gap-1">
-                      <Terminal className="w-3.5 h-3.5 text-blue-500" />
-                      <span>Inspecionar Objetos de Modelo (JSON Realtime)</span>
-                    </h5>
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      <div className="bg-slate-55 block p-3 rounded-xl border border-slate-200 text-center">
-                        <span className="text-lg font-black text-[#2563eb] block font-mono">{users.length}</span>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight block mt-0.5">Users (Table)</span>
-                      </div>
-                      <div className="bg-slate-55 block p-3 rounded-xl border border-slate-200 text-center">
-                        <span className="text-lg font-black text-[#2563eb] block font-mono">{products.length}</span>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight block mt-0.5">Products (Table)</span>
-                      </div>
-                      <div className="bg-slate-55 block p-3 rounded-xl border border-slate-200 text-center">
-                        <span className="text-lg font-black text-[#2563eb] block font-mono">{chats.length}</span>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight block mt-0.5">Chats (Table)</span>
-                      </div>
-                      <div className="bg-slate-55 block p-3 rounded-xl border border-slate-200 text-center">
-                        <span className="text-lg font-black text-[#2563eb] block font-mono">{messages.length}</span>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight block mt-0.5">Messages (Table)</span>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-900 text-[#a6b1df] p-3.5 rounded-xl border border-slate-800 text-xs font-mono h-[140px] overflow-y-auto">
-                      <div className="text-[10px] text-slate-400 mb-2 border-b border-slate-800 pb-1 flex justify-between">
-                        <span>ESTADO DO COMPRADOR LOGADO ("user-buyer-1")</span>
-                        <span>PostgreSQL Row</span>
-                      </div>
-                      <pre className="text-[11px] leading-tight select-all">
-                        {JSON.stringify(users.find(u => u.id === "user-buyer-1"), null, 2)}
-                      </pre>
-                    </div>
-
-                    <div className="bg-slate-900 text-[#d372e1] p-3.5 rounded-xl border border-slate-800 text-xs font-mono h-[140px] overflow-y-auto">
-                      <div className="text-[10px] text-slate-400 mb-2 border-b border-slate-800 pb-1 flex justify-between">
-                        <span>ÚLTIMO PRODUTO SELECIONADO ("Foreign Key Verification")</span>
-                        <span>Product Row (Ad)</span>
-                      </div>
-                      <pre className="text-[11px] leading-tight select-all">
-                        {JSON.stringify(products[0], null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-
-                </div>
-              )}
-
             </div>
-
-            {/* Footer buttons of dev drawers */}
-            <div className="bg-slate-50 p-4 border-t border-slate-200 text-right flex justify-between items-center">
-              <span className="text-[11px] text-slate-400 font-medium">Bando de Dados: PostgreSQL local sim ativo</span>
-              <button 
-                onClick={() => setShowDevPanel(false)}
-                className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold transition"
-              >
-                Voltar ao Marketplace
-              </button>
-            </div>
-
+            
           </div>
         </div>
       )}
