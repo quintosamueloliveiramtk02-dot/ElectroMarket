@@ -1,4 +1,5 @@
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
+import { api } from './lib/api';
 import {
   Smartphone,
   ChevronRight,
@@ -1595,6 +1596,22 @@ export default function App() {
   const [chats, setChats] = useState<Chat[]>(INITIAL_CHATS);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
 
+  // Carrega anúncios reais do backend da Render (banco Supabase) na montagem do componente
+  useEffect(() => {
+    const fetchAds = async () => {
+      try {
+        const data = await api.get<Product[]>('/ads');
+        if (Array.isArray(data)) {
+          setProducts(data);
+        }
+      } catch (err: any) {
+        console.error('Erro ao buscar anúncios do backend real:', err);
+        // Fallback gracioso mantendo os hardcoded se a API falhar no sandbox
+      }
+    };
+    fetchAds();
+  }, []);
+
   // Interface states
   const [selectedCategory, setSelectedCategory] = useState<string>("Todos");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -1639,7 +1656,7 @@ export default function App() {
     }, 2000);
   };
 
-  const handleCreateAd = (e: React.FormEvent) => {
+  const handleCreateAd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAd.title || !newAd.price || !newAd.model) {
       alert("Por favor preencha os campos obrigatórios (Título, Preço e Modelo).");
@@ -1652,8 +1669,61 @@ export default function App() {
       return;
     }
 
-    const generatedId = `prod-custom-${Date.now()}`;
-    const newProductRecord: Product = {
+    // Fluxo de autenticação automática em plano de fundo no Supabase
+    let token = localStorage.getItem('electromarket_token');
+    if (!token) {
+      try {
+        const authData = await api.post<{ token: string; user: any }>('/auth/login', {
+          email: 'carol.santos@exemplo.com',
+          password: 'password123'
+        });
+        token = authData.token;
+        localStorage.setItem('electromarket_token', authData.token);
+        localStorage.setItem('electromarket_user', JSON.stringify(authData.user));
+      } catch (loginErr) {
+        // Se falhar o login, tenta registrar a Carol Santos
+        try {
+          const authData = await api.post<{ token: string; user: any }>('/auth/register', {
+            name: 'Carol Santos',
+            email: 'carol.santos@exemplo.com',
+            password: 'password123',
+            phone: '(11) 98765-4321',
+            avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'
+          });
+          token = authData.token;
+          localStorage.setItem('electromarket_token', authData.token);
+          localStorage.setItem('electromarket_user', JSON.stringify(authData.user));
+        } catch (regErr) {
+          console.error('Erro na autenticação automática para criação:', regErr);
+        }
+      }
+    }
+
+    // Enviar anúncio real para o backend na Render
+    let realProduct: Product | null = null;
+    try {
+      const response = await api.post<{ message: string; ad: Product }>('/ads', {
+        title: newAd.title,
+        description: newAd.description || "Nenhuma descrição fornecida.",
+        price: priceNum,
+        brand: newAd.brand,
+        model: newAd.model,
+        batteryHealth: newAd.batteryHealth ? parseInt(newAd.batteryHealth) : null,
+        storage: newAd.storage,
+        images: [newAd.imagePreset],
+        location: newAd.location,
+        isFeatured: newAd.isFeatured
+      });
+      if (response && response.ad) {
+        realProduct = response.ad;
+      }
+    } catch (apiErr: any) {
+      console.error("Erro ao publicar na API real. Salvando localmente como fallback...", apiErr);
+      alert("Aviso: Conexão direta com a API falhou. O anúncio foi salvo localmente temporariamente.");
+    }
+
+    const generatedId = realProduct ? realProduct.id : `prod-custom-${Date.now()}`;
+    const newProductRecord: Product = realProduct || {
       id: generatedId,
       userId: "user-buyer-1", // Logged user model
       title: newAd.title,
@@ -1669,7 +1739,7 @@ export default function App() {
       createdAt: new Date().toISOString()
     };
 
-    setProducts([newProductRecord, ...products]);
+    setProducts(prevProducts => [newProductRecord, ...prevProducts]);
     setShowAnnounceModal(false);
     
     // Auto reset form

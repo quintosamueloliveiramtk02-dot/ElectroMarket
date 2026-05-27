@@ -1,4 +1,12 @@
-const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000/api';
+let rawApiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000/api';
+
+// Ensures all requests go through the express /api route prefix
+if (rawApiUrl && !rawApiUrl.endsWith('/api') && !rawApiUrl.endsWith('/api/')) {
+  const cleanUrl = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
+  rawApiUrl = `${cleanUrl}/api`;
+}
+
+const API_URL = rawApiUrl;
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;
