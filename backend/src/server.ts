@@ -3,10 +3,10 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
 import { Server } from 'socket.io';
-import authRoutes from './src/routes/authRoutes';
-import adRoutes from './src/routes/adRoutes';
-import chatRoutes from './src/routes/chatRoutes';
-import prisma from './src/lib/prisma';
+import authRoutes from './routes/authRoutes';
+import adRoutes from './routes/adRoutes';
+import chatRoutes from './routes/chatRoutes';
+import prisma from './lib/prisma';
 
 // Load environment variables
 dotenv.config();
