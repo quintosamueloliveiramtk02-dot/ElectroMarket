@@ -29,7 +29,8 @@ import {
   RefreshCw,
   X,
   FileText,
-  Clock
+  Clock,
+  Loader2
 } from 'lucide-react';
 import { User, Product, Chat, Message } from './types';
 
@@ -1592,7 +1593,8 @@ export default function App() {
   
   // Real dynamic states simulating a mini PostgreSQL database driven by standard hooks
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loadingAds, setLoadingAds] = useState<boolean>(true);
   const [chats, setChats] = useState<Chat[]>(INITIAL_CHATS);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
 
@@ -1603,10 +1605,16 @@ export default function App() {
         const data = await api.get<Product[]>('/ads');
         if (Array.isArray(data)) {
           setProducts(data);
+        } else {
+          // Fallback se não for array
+          setProducts(INITIAL_PRODUCTS);
         }
       } catch (err: any) {
         console.error('Erro ao buscar anúncios do backend real:', err);
         // Fallback gracioso mantendo os hardcoded se a API falhar no sandbox
+        setProducts(INITIAL_PRODUCTS);
+      } finally {
+        setLoadingAds(false);
       }
     };
     fetchAds();
@@ -1989,13 +1997,20 @@ export default function App() {
             <h2 className="text-2xl font-bold font-title text-slate-900">Anúncios Recentes</h2>
             <p className="text-sm text-slate-500">Eletrônicos inspecionados com procedência e garantia</p>
           </div>
-          <span className="text-sm font-semibold text-[#2563eb] flex items-center gap-0.5 hover:underline cursor-pointer">
-            {filteredProducts.length} itens encontrados
+          <span className="text-sm font-semibold text-[#2563eb] flex items-center gap-1.5 hover:underline cursor-pointer">
+            {loadingAds ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                <span className="text-slate-500 font-medium">Buscando ofertas reais...</span>
+              </>
+            ) : (
+              <span>{filteredProducts.length} itens encontrados</span>
+            )}
           </span>
         </div>
 
         {/* Empty Search Result feedback */}
-        {filteredProducts.length === 0 && (
+        {!loadingAds && filteredProducts.length === 0 && (
           <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm my-8">
             <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-slate-800">Nenhum anúncio localizado</h3>
@@ -2011,87 +2026,116 @@ export default function App() {
           </div>
         )}
 
-        {/* Products Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {filteredProducts.map(product => {
-            const seller = users.find(u => u.id === product.userId);
-            return (
-              <div 
-                key={product.id}
-                className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm group hover:shadow-lg transition-all transform hover:-translate-y-1 relative duration-200 cursor-pointer"
-                onClick={() => setSelectedProduct(product)}
-              >
-                {/* Image & tag wrapper */}
-                <div className="relative aspect-square overflow-hidden bg-slate-100">
-                  <img 
-                    src={product.images[0]} 
-                    alt={product.title}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  
-                  {/* Badges */}
-                  {product.isFeatured && (
-                    <span className="absolute top-3 left-3 bg-[#141b2b]/95 text-white text-[10px] uppercase font-extrabold px-2 py-0.5 rounded tracking-wide shadow-md flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-amber-400 fill-amber-400" />
-                      <span>Destaque</span>
-                    </span>
-                  )}
-                  
-                  {product.price <= 2000 && !product.isFeatured && (
-                    <span className="absolute top-3 left-3 bg-rose-600 font-extrabold text-[#fff] text-[10px] uppercase px-2 py-0.5 rounded tracking-wide shadow-md">
-                      Oportunidade
-                    </span>
-                  )}
-
-                  {/* Battery Health Display Badge */}
-                  {product.batteryHealth && (
-                    <span className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm text-slate-800 text-[11px] font-bold px-2 py-1 rounded shadow-sm border border-slate-200">
-                      Bateria: {product.batteryHealth}%
-                    </span>
-                  )}
-                </div>
-
-                {/* Info block */}
+        {/* Products Grid / Skeletons */}
+        {loadingAds ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm animate-pulse">
+                {/* Image Placeholder */}
+                <div className="relative aspect-square bg-slate-200" />
+                {/* Info Block Loading */}
                 <div className="p-4 flex flex-col justify-between h-44">
                   <div>
-                    <div className="text-slate-500 text-xs flex items-center gap-1 mb-1 font-medium">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>{product.location}</span>
-                    </div>
-
-                    <h3 className="font-title font-bold text-base text-slate-900 group-hover:text-[#2563eb] leading-snug line-clamp-2 transition-colors">
-                      {product.title}
-                    </h3>
+                    <div className="h-3 bg-slate-200 rounded w-1/3 mb-3" />
+                    <div className="h-4 bg-slate-200 rounded w-5/6 mb-2" />
+                    <div className="h-4 bg-slate-200 rounded w-1/2 mb-1" />
                   </div>
-
                   <div>
-                    {/* Tags */}
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {product.storage && (
-                        <span className="bg-slate-100 text-slate-600 font-mono text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-200">
-                          {product.storage}
-                        </span>
-                      )}
-                      <span className="bg-slate-100 text-slate-600 font-mono text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-200">
-                        {product.brand}
-                      </span>
+                    <div className="flex gap-1.5 mb-4">
+                      <div className="h-5 bg-slate-100 rounded w-12 border border-slate-200/50" />
+                      <div className="h-5 bg-slate-100 rounded w-16 border border-slate-200/50" />
                     </div>
-
                     <div className="flex items-center justify-between">
-                      <p className="font-title font-bold text-lg text-[#004ac6]">
-                        R$ {product.price.toLocaleString('pt-BR')}
-                      </p>
-                      <button className="bg-slate-100 hover:bg-[#2563eb] hover:text-white text-slate-700 p-2 rounded-lg transition-all transform translate-y-2 group-hover:translate-y-0 opacity-80 group-hover:opacity-100">
-                        <ChevronRight className="w-4.5 h-4.5" />
-                      </button>
+                      <div className="h-6 bg-blue-50 rounded w-24" />
+                      <div className="h-8 w-8 bg-slate-100 rounded-lg" />
                     </div>
                   </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            {filteredProducts.map(product => {
+              const seller = users.find(u => u.id === product.userId);
+              return (
+                <div 
+                  key={product.id}
+                  className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm group hover:shadow-lg transition-all transform hover:-translate-y-1 relative duration-200 cursor-pointer"
+                  onClick={() => setSelectedProduct(product)}
+                >
+                  {/* Image & tag wrapper */}
+                  <div className="relative aspect-square overflow-hidden bg-slate-100">
+                    <img 
+                      src={product.images[0]} 
+                      alt={product.title}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    
+                    {/* Badges */}
+                    {product.isFeatured && (
+                      <span className="absolute top-3 left-3 bg-[#141b2b]/95 text-white text-[10px] uppercase font-extrabold px-2 py-0.5 rounded tracking-wide shadow-md flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-amber-400 fill-amber-400" />
+                        <span>Destaque</span>
+                      </span>
+                    )}
+                    
+                    {product.price <= 2000 && !product.isFeatured && (
+                      <span className="absolute top-3 left-3 bg-rose-600 font-extrabold text-[#fff] text-[10px] uppercase px-2 py-0.5 rounded tracking-wide shadow-md">
+                        Oportunidade
+                      </span>
+                    )}
+
+                    {/* Battery Health Display Badge */}
+                    {product.batteryHealth && (
+                      <span className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm text-slate-800 text-[11px] font-bold px-2 py-1 rounded shadow-sm border border-slate-200">
+                        Bateria: {product.batteryHealth}%
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Info block */}
+                  <div className="p-4 flex flex-col justify-between h-44">
+                    <div>
+                      <div className="text-slate-500 text-xs flex items-center gap-1 mb-1 font-medium">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>{product.location}</span>
+                      </div>
+
+                      <h3 className="font-title font-bold text-base text-slate-900 group-hover:text-[#2563eb] leading-snug line-clamp-2 transition-colors">
+                        {product.title}
+                      </h3>
+                    </div>
+
+                    <div>
+                      {/* Tags */}
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {product.storage && (
+                          <span className="bg-slate-100 text-slate-600 font-mono text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-200">
+                            {product.storage}
+                          </span>
+                        )}
+                        <span className="bg-slate-100 text-slate-600 font-mono text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-200">
+                          {product.brand}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <p className="font-title font-bold text-lg text-[#004ac6]">
+                          R$ {product.price.toLocaleString('pt-BR')}
+                        </p>
+                        <button className="bg-slate-100 hover:bg-[#2563eb] hover:text-white text-slate-700 p-2 rounded-lg transition-all transform translate-y-2 group-hover:translate-y-0 opacity-80 group-hover:opacity-100">
+                          <ChevronRight className="w-4.5 h-4.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Newsletter CTA Area */}
         <section className="bg-[#2563eb] text-white rounded-2xl p-8 sm:p-12 mb-12 flex flex-col lg:flex-row items-center justify-between gap-6 shadow-md relative overflow-hidden">
