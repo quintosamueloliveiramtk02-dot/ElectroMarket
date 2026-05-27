@@ -34,6 +34,35 @@ app.use('/api/auth', authRoutes);
 app.use('/api/ads', adRoutes);
 app.use('/api/chats', chatRoutes);
 
+// Secure database check endpoint
+app.get('/api/debug-db', (req, res) => {
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    return res.json({
+      status: 'error',
+      message: 'DATABASE_URL is not set on process.env on Render'
+    });
+  }
+  
+  // Mask password for safety
+  let maskedUrl = dbUrl;
+  try {
+    const parsed = new URL(dbUrl);
+    parsed.password = '********';
+    maskedUrl = parsed.toString();
+  } catch (e: any) {
+    maskedUrl = dbUrl.substring(0, Math.min(15, dbUrl.length)) + '... (invalid URL format: ' + e.message + ')';
+  }
+
+  res.json({
+    status: 'configured',
+    maskedUrl,
+    startsWithPostgres: dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://'),
+    length: dbUrl.length,
+    characterOneToFive: dbUrl.substring(0, 5)
+  });
+});
+
 // Base Route
 app.get('/', (req, res) => {
   res.json({
