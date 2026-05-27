@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-title: "Hanken Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand: #004ac6;
+  --color-brand-light: #2563eb;
+  --color-dark: #141b2b;
+  --color-card-bg: #ffffff;
+  --color-panel-bg: #f9f9ff;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-panel-bg);
+  color: var(--color-dark);
+}
+
+.title-font {
+  font-family: var(--font-title);
+}
+

@@ -1,0 +1,6 @@
+{
+  "name": "ElectroMarket Template",
+  "description": "Initial design and backend structure for ElectroMarket, a premium electronics and smartphones marketplace with Prisma schemas and Express server code.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,3104 @@
+import React, { useState, useTransition } from 'react';
+import {
+  Smartphone,
+  ChevronRight,
+  PlusCircle,
+  Search,
+  ShoppingCart,
+  User as UserIcon,
+  MapPin,
+  Flame,
+  CheckCircle,
+  Copy,
+  Terminal,
+  Database,
+  FileCode,
+  Server,
+  MessageSquare,
+  Globe,
+  Plus,
+  Send,
+  Trash2,
+  Lock,
+  ArrowRight,
+  Info,
+  Check,
+  Package,
+  Sparkles,
+  RefreshCw,
+  X,
+  FileText,
+  Clock
+} from 'lucide-react';
+import { User, Product, Chat, Message } from './types';
+
+// Let's create the hardcoded database code representations to display & copy easily.
+const SCHEMA_PRISMA_CODE = `datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  avatarUrl    String?
+  phone        String?
+  createdAt    DateTime  @default(now())
+
+  // Relations
+  products     Product[]
+  chatsAsBuyer Chat[]    @relation("BuyerChats")
+  chatsAsSeller Chat[]   @relation("SellerChats")
+  messages     Message[]
+}
+
+model Product {
+  id            String   @id @default(uuid())
+  userId        String
+  title         String
+  description   String
+  price         Float
+  brand         String
+  model         String
+  batteryHealth Int?
+  storage       String?
+  images        String[]
+  location      String
+  isFeatured    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  // Relations
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chats         Chat[]
+}
+
+model Chat {
+  id        String   @id @default(uuid())
+  buyerId   String
+  sellerId  String
+  productId String
+  createdAt DateTime @default(now())
+
+  // Relations
+  buyer     User      @relation("BuyerChats", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller    User      @relation("SellerChats", fields: [sellerId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@unique([buyerId, sellerId, productId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  chatId    String
+  senderId  String
+  text      String
+  createdAt DateTime @default(now())
+
+  // Relations
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}`;
+
+const PACKAGE_JSON_CODE = `{
+  "name": "electromarket-backend",
+  "version": "1.0.0",
+  "description": "Back-end structure for ElectroMarket, a premium electronics and smartphones marketplace",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.14.0",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.12.12",
+    "prisma": "^5.14.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
+  }
+}`;
+
+const SERVER_TS_CODE = `import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import http from 'http';
+import { Server } from 'socket.io';
+import authRoutes from './src/routes/authRoutes';
+import adRoutes from './src/routes/adRoutes';
+import chatRoutes from './src/routes/chatRoutes';
+import prisma from './src/lib/prisma';
+
+// Load environment variables
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Create HTTP Server
+const server = http.createServer(app);
+
+// Integrate Socket.io with CORS configuration
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+  }
+});
+
+// Middlewares
+app.use(cors());
+app.use(express.json());
+
+// Auth, Ads & Chat routes registration
+app.use('/api/auth', authRoutes);
+app.use('/api/ads', adRoutes);
+app.use('/api/chats', chatRoutes);
+
+// Base Route
+app.get('/', (req, res) => {
+  res.json({
+    message: 'ElectroMarket Backend successfully configured!',
+    status: 'online',
+    version: '1.0.0',
+    documentationUrl: '/api/docs'
+  });
+});
+
+// Initial API health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    uptime: process.uptime(),
+    timestamp: new Date()
+  });
+});
+
+// Socket.io real-time connection handler
+io.on('connection', (socket) => {
+  console.log(\`[Socket.io] Novo cliente conectado: \${socket.id}\`);
+
+  // Evento para entrar em um canal de conversa privado
+  socket.on('join_room', (chatId: string) => {
+    socket.join(chatId);
+    console.log(\`[Socket.io] Cliente \${socket.id} entrou no chat (sala): \${chatId}\`);
+  });
+
+  // Evento para envio de mensagens em tempo real
+  socket.on('send_message', async (data: { chatId: string; senderId: string; text: string }) => {
+    const { chatId, senderId, text } = data;
+
+    try {
+      // Salva no banco de dados através do Prisma
+      const message = await prisma.message.create({
+        data: {
+          chatId,
+          senderId,
+          text,
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              avatarUrl: true
+            }
+          }
+        }
+      });
+
+      // Retransmite imediatamente para todos os os participantes na mesma sala do Chat
+      io.to(chatId).emit('receive_message', message);
+    } catch (error: any) {
+      console.error('[Socket.io] Erro ao processar:', error.message);
+    }
+  });
+
+  // Evento de desconexão
+  socket.on('disconnect', () => {
+    console.log(\`[Socket.io] Cliente desconectado: \${socket.id}\`);
+  });
+});
+
+// Start server
+server.listen(PORT, () => {
+  console.log(\`[ElectroMarket Server] Running with Socket.io on port \${PORT}\`);
+});`;
+
+const AUTH_MIDDLEWARE_CODE = `import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+
+export interface AuthRequest extends Request {
+  userId?: string;
+}
+
+export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    res.status(401).json({ error: 'Token de autenticação não fornecido' });
+    return;
+  }
+
+  const parts = authHeader.split(' ');
+
+  if (parts.length !== 2) {
+    res.status(401).json({ error: 'Erro no formato do token' });
+    return;
+  }
+
+  const [scheme, token] = parts;
+
+  if (!/^Bearer$/i.test(scheme)) {
+    res.status(401).json({ error: 'Token malformatado. Use o padrão "Bearer <token>"' });
+    return;
+  }
+
+  const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-electromarket';
+
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as { id: string };
+    req.userId = decoded.id;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Token inválido ou expirado' });
+    return;
+  }
+};`;
+
+const AUTH_CONTROLLER_CODE = `import { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import prisma from '../lib/prisma';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key-electromarket';
+
+export const register = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, password, name, phone, avatarUrl } = req.body;
+
+    // Campos obrigatórios de validação
+    if (!email || !password || !name) {
+      res.status(400).json({ error: 'Campos obrigatórios ausentes (email, password, name)' });
+      return;
+    }
+
+    // Verificar se o usuário já existe
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      res.status(400).json({ error: 'Este e-mail já está cadastrado em nossa plataforma' });
+      return;
+    }
+
+    // Criptografar a senha com o Bcrypt
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    // Salvar o novo usuário no PostgreSQL via Prisma
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        name,
+        phone,
+        avatarUrl,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        avatarUrl: true,
+        createdAt: true,
+      }
+    });
+
+    // Gerar um Token JWT válido por 7 dias
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, {
+      expiresIn: '7d',
+    });
+
+    res.status(201).json({
+      message: 'Usuário registrado com sucesso!',
+      user,
+      token,
+    });
+  } catch (error: any) {
+    res.status(500).json({ 
+      error: 'Erro interno do servidor ao registrar usuário', 
+      details: error.message 
+    });
+  }
+};
+
+export const login = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, password } = req.body;
+
+    // Validar entradas
+    if (!email || !password) {
+      res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
+      return;
+    }
+
+    // Verificar se o e-mail existe cadastrado
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      res.status(401).json({ error: 'E-mail ou senha incorretos' });
+      return;
+    }
+
+    // Comparar senhas com Bcrypt
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+
+    if (!isPasswordValid) {
+      res.status(401).json({ error: 'E-mail ou senha incorretos' });
+      return;
+    }
+
+    // Gerar Token JWT válido por 7 dias
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, {
+      expiresIn: '7d',
+    });
+
+    // Resposta de sucesso omitindo a hash de senha
+    res.status(200).json({
+      message: 'Login realizado com sucesso!',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        phone: user.phone,
+        avatarUrl: user.avatarUrl,
+        createdAt: user.createdAt,
+      },
+      token,
+    });
+  } catch (error: any) {
+    res.status(500).json({ 
+      error: 'Erro interno do servidor ao realizar login', 
+      details: error.message 
+    });
+  }
+};`;
+
+const AUTH_ROUTES_CODE = `import { Router } from 'express';
+import { register, login } from '../controllers/authController';
+
+const router = Router();
+
+// Endpoints de autenticação conectados às respectivas funções
+router.post('/register', register);
+router.post('/login', login);
+
+export default router;`;
+
+const AD_CONTROLLER_CODE = `import { Response } from 'express';
+import { AuthRequest } from '../middlewares/authMiddleware';
+import prisma from '../lib/prisma';
+
+// 1. Criar um anúncio associado ao ID do usuário autenticado
+export const createAd = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { title, description, price, brand, model, batteryHealth, storage, images, location, isFeatured } = req.body;
+    const userId = req.userId;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Usuário não autenticado ou inválido' });
+      return;
+    }
+
+    if (!title || !price || !brand || !model || !location) {
+      res.status(400).json({ error: 'Campos obrigatórios ausentes (title, price, brand, model, location)' });
+      return;
+    }
+
+    const priceFloat = parseFloat(price);
+    if (isNaN(priceFloat)) {
+      res.status(400).json({ error: 'O preço informado deve ser um número válido' });
+      return;
+    }
+
+    const ad = await prisma.product.create({
+      data: {
+        userId,
+        title,
+        description: description || '',
+        price: priceFloat,
+        brand,
+        model,
+        batteryHealth: batteryHealth ? parseInt(batteryHealth, 10) : null,
+        storage: storage || null,
+        images: Array.isArray(images) ? images : [],
+        location,
+        isFeatured: !!isFeatured,
+      }
+    });
+
+    res.status(201).json({
+      message: 'Anúncio publicado com sucesso!',
+      ad,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Erro interno ao publicar anúncio',
+      details: error.message
+    });
+  }
+};
+
+// 2. Filtrar e listar todos os anúncios públicos
+export const getAllAds = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { brand, minPrice, maxPrice, storage, search, isFeatured } = req.query;
+
+    const whereClause: any = {};
+
+    // Filtro por Marca
+    if (brand && typeof brand === 'string') {
+      whereClause.brand = {
+        equals: brand,
+        mode: 'insensitive',
+      };
+    }
+
+    // Filtro por Armazenamento
+    if (storage && typeof storage === 'string') {
+      whereClause.storage = {
+        equals: storage,
+        mode: 'insensitive',
+      };
+    }
+
+    // Filtro por Destaque
+    if (isFeatured !== undefined) {
+      whereClause.isFeatured = isFeatured === 'true' || isFeatured === '1';
+    }
+
+    // Faixa de Preço
+    if (minPrice || maxPrice) {
+      whereClause.price = {};
+      if (minPrice && typeof minPrice === 'string') {
+        const min = parseFloat(minPrice);
+        if (!isNaN(min)) {
+          whereClause.price.gte = min;
+        }
+      }
+      if (maxPrice && typeof maxPrice === 'string') {
+        const max = parseFloat(maxPrice);
+        if (!isNaN(max)) {
+          whereClause.price.lte = max;
+        }
+      }
+    }
+
+    // Filtro de Busca Geral (por Título, Descrição, Modelo)
+    if (search && typeof search === 'string') {
+      const searchTerms = search.trim();
+      whereClause.OR = [
+        { title: { contains: searchTerms, mode: 'insensitive' } },
+        { description: { contains: searchTerms, mode: 'insensitive' } },
+        { model: { contains: searchTerms, mode: 'insensitive' } },
+      ];
+    }
+
+    const ads = await prisma.product.findMany({
+      where: whereClause,
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          }
+        }
+      }
+    });
+
+    res.status(200).json(ads);
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Erro ao buscar anúncios',
+      details: error.message
+    });
+  }
+};
+
+// 3. Buscar os detalhes de um anúncio específico e dados do vendedor
+export const getAdById = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const ad = await prisma.product.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            avatarUrl: true,
+            createdAt: true,
+          }
+        }
+      }
+    });
+
+    if (!ad) {
+      res.status(404).json({ error: 'Anúncio não encontrado' });
+      return;
+    }
+
+    res.status(200).json(ad);
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Erro ao buscar detalhes do anúncio',
+      details: error.message
+    });
+  }
+};
+
+// 4. Atualizar as informações de um anúncio (Apenas o próprio dono)
+export const updateAd = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+    const { title, description, price, brand, model, batteryHealth, storage, images, location, isFeatured } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Não autorizado' });
+      return;
+    }
+
+    // Buscar anúncio e validar propriedade
+    const ad = await prisma.product.findUnique({
+      where: { id }
+    });
+
+    if (!ad) {
+      res.status(404).json({ error: 'Anúncio não encontrado' });
+      return;
+    }
+
+    if (ad.userId !== userId) {
+      res.status(403).json({ error: 'Você não tem permissão para editar este anúncio' });
+      return;
+    }
+
+    // Preparar dados de atualização
+    const updatedData: any = {};
+    if (title !== undefined) updatedData.title = title;
+    if (description !== undefined) updatedData.description = description;
+    if (price !== undefined) {
+      const priceFloat = parseFloat(price);
+      if (!isNaN(priceFloat)) {
+        updatedData.price = priceFloat;
+      }
+    }
+    if (brand !== undefined) updatedData.brand = brand;
+    if (model !== undefined) updatedData.model = model;
+    if (batteryHealth !== undefined) {
+      updatedData.batteryHealth = batteryHealth ? parseInt(batteryHealth, 10) : null;
+    }
+    if (storage !== undefined) updatedData.storage = storage || null;
+    if (images !== undefined && Array.isArray(images)) updatedData.images = images;
+    if (location !== undefined) updatedData.location = location;
+    if (isFeatured !== undefined) updatedData.isFeatured = !!isFeatured;
+
+    const updatedAd = await prisma.product.update({
+      where: { id },
+      data: updatedData
+    });
+
+    res.status(200).json({
+      message: 'Anúncio atualizado com sucesso!',
+      ad: updatedAd
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Erro ao atualizar o anúncio',
+      details: error.message
+    });
+  }
+};
+
+// 5. Excluir anúncio (Apenas o próprio dono)
+export const deleteAd = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Não autorizado' });
+      return;
+    }
+
+    // Buscar anúncio e validar propriedade
+    const ad = await prisma.product.findUnique({
+      where: { id }
+    });
+
+    if (!ad) {
+      res.status(404).json({ error: 'Anúncio não encontrado' });
+      return;
+    }
+
+    if (ad.userId !== userId) {
+      res.status(403).json({ error: 'Você não tem permissão para excluir este anúncio' });
+      return;
+    }
+
+    await prisma.product.delete({
+      where: { id }
+    });
+
+    res.status(200).json({
+      message: 'Anúncio excluído com sucesso!'
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Erro ao excluir o anúncio',
+      details: error.message
+    });
+  }
+};`;
+
+const AD_ROUTES_CODE = `import { Router } from 'express';
+import { createAd, getAllAds, getAdById, updateAd, deleteAd } from '../controllers/adController';
+import { authMiddleware } from '../middlewares/authMiddleware';
+
+const router = Router();
+
+// Rotas públicas de consulta
+router.get('/', getAllAds);
+router.get('/:id', getAdById);
+
+// Rotas privadas protegidas pelo authMiddleware
+router.post('/', authMiddleware, createAd);
+router.put('/:id', authMiddleware, updateAd);
+router.delete('/:id', authMiddleware, deleteAd);
+
+export default router;`;
+
+const CHAT_CONTROLLER_CODE = `import { Response } from 'express';
+import { AuthRequest } from '../middlewares/authMiddleware';
+import prisma from '../lib/prisma';
+
+// 1. Verificar se já existe um chat ou criar um novo associando o comprador, vendedor e o produto
+export const getOrCreateChat = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { productId, sellerId: bodySellerId } = req.body;
+    const buyerId = req.userId;
+
+    if (!buyerId) {
+      res.status(401).json({ error: 'Comprador não autenticado' });
+      return;
+    }
+
+    if (!productId) {
+      res.status(400).json({ error: 'O ID do produto (productId) é obrigatório' });
+      return;
+    }
+
+    let sellerId = bodySellerId;
+    if (!sellerId) {
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: { userId: true }
+      });
+
+      if (!product) {
+        res.status(404).json({ error: 'Produto não encontrado' });
+        return;
+      }
+      sellerId = product.userId;
+    }
+
+    if (buyerId === sellerId) {
+      res.status(400).json({ error: 'Você não pode iniciar um chat com o seu próprio anúncio' });
+      return;
+    }
+
+    let chat = await prisma.chat.findUnique({
+      where: {
+        buyerId_sellerId_productId: {
+          buyerId,
+          sellerId,
+          productId
+        }
+      },
+      include: {
+        product: { select: { title: true, images: true, price: true } },
+        seller: { select: { name: true, avatarUrl: true } },
+        buyer: { select: { name: true, avatarUrl: true } }
+      }
+    });
+
+    if (!chat) {
+      chat = await prisma.chat.create({
+        data: { buyerId, sellerId, productId },
+        include: {
+          product: { select: { title: true, images: true, price: true } },
+          seller: { select: { name: true, avatarUrl: true } },
+          buyer: { select: { name: true, avatarUrl: true } }
+        }
+      });
+    }
+
+    res.status(200).json(chat);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Erro ao obter ou criar sala de chat', details: error.message });
+  }
+};
+
+// 2. Listar todas os chats em que o usuário está participando (como comprador ou vendedor)
+export const getUserChats = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Não autorizado' });
+      return;
+    }
+
+    const chats = await prisma.chat.findMany({
+      where: {
+        OR: [
+          { buyerId: userId },
+          { sellerId: userId }
+        ]
+      },
+      include: {
+        product: { select: { id: true, title: true, price: true, images: true, brand: true, model: true } },
+        buyer: { select: { id: true, name: true, avatarUrl: true, phone: true } },
+        seller: { select: { id: true, name: true, avatarUrl: true, phone: true } },
+        messages: { orderBy: { createdAt: 'desc' }, take: 1 }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.status(200).json(chats);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Erro ao listar chats', details: error.message });
+  }
+};
+
+// 3. Puxar o histórico de mensagens de um chat específico, ordenado por data
+export const getChatMessages = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Não autorizado' });
+      return;
+    }
+
+    const chat = await prisma.chat.findUnique({
+      where: { id },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            sender: { select: { id: true, name: true, avatarUrl: true } }
+          }
+        }
+      }
+    });
+
+    if (!chat) {
+      res.status(404).json({ error: 'Conversa não encontrada' });
+      return;
+    }
+
+    if (chat.buyerId !== userId && chat.sellerId !== userId) {
+      res.status(403).json({ error: 'Não autorizado' });
+      return;
+    }
+
+    res.status(200).json(chat.messages);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Erro ao buscar mensagens', details: error.message });
+  }
+};`;
+
+const CHAT_ROUTES_CODE = `import { Router } from 'express';
+import { getOrCreateChat, getUserChats, getChatMessages } from '../controllers/chatController';
+import { authMiddleware } from '../middlewares/authMiddleware';
+
+const router = Router();
+
+// Endpoints de chat protegidos por autenticação
+router.post('/', authMiddleware, getOrCreateChat);
+router.get('/', authMiddleware, getUserChats);
+router.get('/:id/messages', authMiddleware, getChatMessages);
+
+export default router;`;
+
+const FRONT_API_CODE = `const API_URL = 'http://localhost:5000/api';
+
+interface RequestOptions extends RequestInit {
+  params?: Record<string, string>;
+}
+
+async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  const token = localStorage.getItem('electromarket_token') || '';
+  
+  const headers = new Headers(options.headers || {});
+  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+  
+  if (token) {
+    headers.set('Authorization', \`Bearer \${token}\`);
+  }
+
+  let url = \`\${API_URL}\${endpoint.startsWith('/') ? endpoint : \`/\${endpoint}\`}\`;
+  if (options.params) {
+    const cleanParamsObj: Record<string, string> = {};
+    Object.entries(options.params).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '') {
+        cleanParamsObj[key] = val;
+      }
+    });
+    const query = new URLSearchParams(cleanParamsObj).toString();
+    if (query) {
+      url += \`?\${query}\`;
+    }
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || \`Erro de rede HTTP (Código \${response.status})\`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export const api = {
+  get: async <T>(endpoint: string, options?: RequestOptions): Promise<T> => {
+    return request<T>(endpoint, { ...options, method: 'GET' });
+  },
+  post: async <T>(endpoint: string, data?: any, options?: RequestOptions): Promise<T> => {
+    return request<T>(endpoint, {
+      ...options,
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  },
+  put: async <T>(endpoint: string, data?: any, options?: RequestOptions): Promise<T> => {
+    return request<T>(endpoint, {
+      ...options,
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  },
+  delete: async <T>(endpoint: string, options?: RequestOptions): Promise<T> => {
+    return request<T>(endpoint, { ...options, method: 'DELETE' });
+  }
+};`;
+
+const FRONT_AUTH_CONTEXT_CODE = `import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { api } from '../lib/api';
+import { User } from '../types';
+
+interface AuthContextType {
+  user: User | null;
+  token: string | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string, phone?: string, avatarUrl?: string) => Promise<void>;
+  logout: () => void;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // Efeito ao inicializar o site para recuperar sessão salva
+  useEffect(() => {
+    const initializeAuth = () => {
+      try {
+        const savedToken = localStorage.getItem('electromarket_token');
+        const savedUser = localStorage.getItem('electromarket_user');
+
+        if (savedToken && savedUser) {
+          setToken(savedToken);
+          setUser(JSON.parse(savedUser));
+        }
+      } catch (error) {
+        console.error('Erro ao restaurar sessão de autenticação local:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
+  // Função para autenticar o usuário e iniciar sessão
+  const login = async (email: string, password: string): Promise<void> => {
+    try {
+      const data = await api.post<{ message: string; user: User; token: string }>('/auth/login', {
+        email,
+        password,
+      });
+
+      setToken(data.token);
+      setUser(data.user);
+
+      localStorage.setItem('electromarket_token', data.token);
+      localStorage.setItem('electromarket_user', JSON.stringify(data.user));
+    } catch (error: any) {
+      throw new Error(error.message || 'Falha ao realizar login');
+    }
+  };
+
+  // Função para registrar um novo usuário
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    phone?: string,
+    avatarUrl?: string
+  ): Promise<void> => {
+    try {
+      const data = await api.post<{ message: string; user: User; token: string }>('/auth/register', {
+        name,
+        email,
+        password,
+        phone: phone || '',
+        avatarUrl: avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120px&h=120px&q=80',
+      });
+
+      // Login automático após registrar com sucesso
+      setToken(data.token);
+      setUser(data.user);
+
+      localStorage.setItem('electromarket_token', data.token);
+      localStorage.setItem('electromarket_user', JSON.stringify(data.user));
+    } catch (error: any) {
+      throw new Error(error.message || 'Falha ao registrar conta');
+    }
+  };
+
+  // Função para deslogar do sistema
+  const logout = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('electromarket_token');
+    localStorage.removeItem('electromarket_user');
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth deve ser utilizado dentro de um provider <AuthProvider />');
+  }
+  return context;
+};`;
+
+const FRONT_NAVBAR_CODE = `import React, { useState } from 'react';
+import { Search, PlusCircle, LogIn, User as UserIcon, LogOut, Flame } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+
+interface NavbarProps {
+  searchQuery?: string;
+  setSearchQuery?: (query: string) => void;
+  onAnnounceClick?: () => void;
+  onLoginClick?: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({
+  searchQuery = '',
+  setSearchQuery,
+  onAnnounceClick,
+  onLoginClick,
+}) => {
+  const { user, logout } = useAuth();
+  const [localSearch, setLocalSearch] = useState(searchQuery);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setLocalSearch(value);
+    if (setSearchQuery) {
+      setSearchQuery(value);
+    }
+  };
+
+  return (
+    <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm transition-all">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 gap-4">
+          
+          <div className="flex items-center gap-2 cursor-pointer select-none">
+            <div className="bg-blue-600 p-2 rounded-xl text-white flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <Flame className="w-5 h-5 fill-white" />
+            </div>
+            <span className="text-xl font-bold font-sans tracking-tight text-slate-900">
+              Electro<span className="text-blue-600">Market</span>
+            </span>
+          </div>
+
+          <div className="flex-1 max-w-md relative hidden md:block">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-slate-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Pesquisar iPhone, Galaxy..."
+              value={setSearchQuery ? searchQuery : localSearch}
+              onChange={handleSearchChange}
+              className="block w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl bg-slate-50 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            {user ? (
+              <>
+                <button
+                  type="button"
+                  onClick={onAnnounceClick}
+                  className="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-xl font-semibold text-sm transition-all flex items-center gap-1.5 shadow-md shadow-blue-500/10 cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span className="hidden sm:inline">Anunciar</span>
+                </button>
+
+                <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+                  <div className="flex items-center gap-2 group cursor-pointer">
+                    <img
+                      src={user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80px&h=80px&q=80'}
+                      alt={user.name}
+                      className="w-8 h-8 rounded-full border border-slate-200 object-cover"
+                    />
+                    <div className="hidden lg:block text-left">
+                      <p className="text-xs font-semibold text-slate-800 leading-tight block max-w-[120px] truncate">
+                        {user.name}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={logout}
+                        className="text-[10px] text-slate-400 hover:text-red-500 font-medium transition flex items-center gap-0.5"
+                      >
+                        Sair
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={onLoginClick}
+                className="bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 px-4 py-2 rounded-xl font-semibold text-sm transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <LogIn className="w-4 h-4 text-blue-600" />
+                <span>Entrar</span>
+              </button>
+            )}
+          </div>
+
+        </div>
+      </div>
+    </nav>
+  );
+};
+
+export default Navbar;`;
+
+const FRONT_HOME_PAGE_CODE = `import React, { useState, useEffect } from 'react';
+import { api } from '../lib/api';
+import { Product } from '../types';
+import Navbar from '../components/Navbar';
+import { Smartphone, Battery, MapPin, Search, Package } from 'lucide-react';
+
+export default function HomePage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    api.get<Product[]>('/ads')
+      .then(setProducts)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filteredProducts = products.filter(p => {
+    const matchesCategory = selectedCategory === 'Todos' ||
+      (selectedCategory === 'iPhone' && p.brand.toLowerCase() === 'apple') ||
+      (selectedCategory === 'Samsung' && p.brand.toLowerCase() === 'samsung') ||
+      (selectedCategory === 'Xiaomi' && p.brand.toLowerCase() === 'xiaomi');
+
+    const matchesSearch = !searchQuery ||
+      p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.model.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchesCategory && matchesSearch;
+  });
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+      <Navbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Categories Quick Filtering */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-8">
+          {['Todos', 'iPhone', 'Samsung', 'Xiaomi'].map(cat => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={\`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold border cursor-pointer \${
+                selectedCategory === cat ? 'bg-blue-600 text-white' : 'bg-white text-slate-750'
+              }\`}
+            >
+              <span>{cat}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Product list grid layout */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {filteredProducts.map(product => (
+            <div key={product.id} className="bg-white border rounded-2xl overflow-hidden hover:shadow-md transition">
+              <div className="relative aspect-square">
+                <img src={product.images?.[0]} className="w-full h-full object-cover" />
+                {product.batteryHealth && (
+                  <span className="absolute bottom-2 left-2 bg-slate-900/80 text-white text-xs px-2 py-1 rounded">
+                    Bateria: {product.batteryHealth}%
+                  </span>
+                )}
+              </div>
+              <div className="p-4">
+                <h3 className="font-bold text-sm truncate">{product.title}</h3>
+                <span className="text-blue-600 font-extrabold block mt-2">
+                  R$ {product.price.toLocaleString('pt-BR')}
+                </span>
+                <span className="text-xs text-slate-400 mt-2 block">{product.location}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+}`;
+
+const FRONT_SUPABASE_CODE = `import { createClient } from '@supabase/supabase-js';
+
+// Obter as variáveis de ambiente com prefixo VITE_ para uso no front-end
+const supabaseUrl = ((import.meta as any).env?.VITE_SUPABASE_URL as string) || '';
+const supabaseAnonKey = ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string) || '';
+
+// Se as chaves ainda não estiverem configuradas no painel de segredos/ambiente, 
+// criamos uma instância básica ou exportamos null para tratamento elegante na UI.
+const isConfigured = Boolean(supabaseUrl && supabaseAnonKey && supabaseUrl !== 'https://your-project-id.supabase.co');
+
+if (!isConfigured) {
+  console.warn(
+    '[Supabase] Atenção: VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY não estão configuradas. ' +
+    'Por favor, configure as variáveis de ambiente para conectar-se ao seu projeto real.'
+  );
+}
+
+// Instância do cliente Supabase para consultas, autenticação e real-time
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder-project-id.supabase.co',
+  supabaseAnonKey || 'placeholder-anon-key'
+);
+
+export const hasSupabaseConfig = isConfigured;`;
+
+const FRONT_AD_DETAIL_CODE = `'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { api } from '../../../lib/api';
+import { Product } from '../../../types';
+import { useAuth } from '../../../contexts/AuthContext';
+import Navbar from '../../../components/Navbar';
+import { Smartphone, Battery, MapPin, MessageSquare, ArrowLeft, ShieldCheck } from 'lucide-react';
+
+export default function AdDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const { user } = useAuth();
+  const id = params?.id as string;
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
+
+  useEffect(() => {
+    if (id) {
+      api.get<Product>(\`/ads/\${id}\`).then(setProduct).finally(() => setLoading(false));
+    }
+  }, [id]);
+
+  const handleStartChat = async () => {
+    if (!product) return;
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    const resp = await api.post<{ id: string }>('/chats', {
+      productId: product.id,
+      sellerId: product.userId
+    });
+    router.push(\`/chat?id=\${resp.id}\`);
+  };
+
+  if (loading) return <div>Carregando...</div>;
+  if (!product) return <div>Anúncio não encontrado.</div>;
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      <Navbar />
+      <main className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-7 space-y-4">
+          <div className="aspect-square bg-white border rounded-2xl overflow-hidden flex items-center justify-center">
+            <img src={product.images?.[activeImageIdx]} className="w-full h-full object-cover" />
+          </div>
+        </div>
+        <div className="lg:col-span-5 space-y-6">
+          <div className="bg-white border rounded-2xl p-6 shadow-sm space-y-6">
+            <h1 className="text-xl sm:text-2xl font-extrabold">{product.title}</h1>
+            <span className="text-2xl font-black text-blue-600">R$ {product.price.toLocaleString('pt-BR')}</span>
+            <button onClick={handleStartChat} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl">
+              Conversar com o Vendedor
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}`;
+
+const FRONT_CHAT_CODE = `'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
+import { api } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
+import Navbar from '../../components/Navbar';
+
+export default function ChatPage() {
+  const { user } = useAuth();
+  const [chats, setChats] = useState([]);
+  const [activeChatId, setActiveChatId] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [inputText, setInputText] = useState('');
+  const socketRef = useRef(null);
+
+  useEffect(() => {
+    api.get('/chats').then(setChats);
+  }, []);
+
+  useEffect(() => {
+    const socket = io('http://localhost:5000');
+    socketRef.current = socket;
+    
+    if (activeChatId) {
+      socket.emit('join_room', activeChatId);
+    }
+
+    socket.on('receive_message', (newMsg) => {
+      setMessages(prev => [...prev, newMsg]);
+    });
+
+    return () => socket.disconnect();
+  }, [activeChatId]);
+
+  const handleSend = () => {
+    socketRef.current.emit('send_message', {
+      chatId: activeChatId,
+      senderId: user.id,
+      text: inputText
+    });
+    setInputText('');
+  };
+
+  return (
+    <div className="h-screen flex flex-col bg-slate-50 font-sans">
+      <Navbar />
+      <div className="flex-1 flex overflow-hidden">
+        {/* Chats lists sidebar */}
+        <div className="w-80 bg-white border-r">
+          {chats.map(c => (
+            <div key={c.id} onClick={() => setActiveChatId(c.id)}>
+              {c.product?.title}
+            </div>
+          ))}
+        </div>
+        {/* Chat box */}
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map(m => (
+              <div key={m.id} className={m.senderId === user?.id ? 'text-right' : 'text-left'}>
+                {m.text}
+              </div>
+            ))}
+          </div>
+          <div className="p-4 border-t flex">
+            <input value={inputText} onChange={e => setInputText(e.target.value)} />
+            <button onClick={handleSend}>Enviar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}`;
+
+const FRONT_ANUNCIAR_CODE = `'use client';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { api } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
+import Navbar from '../../components/Navbar';
+
+export default function AnunciarPage() {
+  const router = useRouter();
+  const { user } = useAuth();
+
+  const [title, setTitle] = useState('');
+  const [price, setPrice] = useState('');
+  const [brand, setBrand] = useState('Apple');
+  const [model, setModel] = useState('');
+  const [storage, setStorage] = useState('128GB');
+  const [batteryHealth, setBatteryHealth] = useState('90');
+  const [location, setLocation] = useState('');
+  const [description, setDescription] = useState('');
+  const [images, setImages] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    await api.post('/ads', {
+      title,
+      price: parseFloat(price),
+      brand,
+      model,
+      storage,
+      batteryHealth: parseInt(batteryHealth, 10),
+      location,
+      description,
+      images
+    });
+    router.push('/');
+  };
+
+  if (!user) return <div>Faça login para anunciar.</div>;
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      <Navbar />
+      <main className="max-w-xl mx-auto py-12 px-4 bg-white border rounded-2xl p-8 mt-8 shadow-sm">
+        <h1 className="text-xl font-bold mb-4">Anunciar Smartphone</h1>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input placeholder="Título" value={title} onChange={e => setTitle(e.target.value)} required />
+          <input type="number" placeholder="Preço (R$)" value={price} onChange={e => setPrice(e.target.value)} required />
+          <button type="submit" className="bg-blue-600 text-white w-full py-3 rounded-lg">Anunciar</button>
+        </form>
+      </main>
+    </div>
+  );
+}`;
+
+// Static simulation list
+const INITIAL_USERS: User[] = [
+  {
+    id: "user-buyer-1",
+    email: "carol.santos@exemplo.com",
+    passwordHash: "$2b$10$xyzBuyerHashSecureString",
+    name: "Carol Santos",
+    avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
+    phone: "(11) 98765-4321",
+    createdAt: "2026-05-10T12:00:00Z"
+  },
+  {
+    id: "user-seller-2",
+    email: "marcos.lima@exemplo.com",
+    passwordHash: "$2b$10$abcSellerHashSecureString",
+    name: "Marcos Lima",
+    avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+    phone: "(11) 91234-5678",
+    createdAt: "2026-05-01T09:30:00Z"
+  },
+  {
+    id: "user-seller-3",
+    email: "ana.oliveira@exemplo.com",
+    passwordHash: "$2b$10$defSellerHashSecureString",
+    name: "Ana Oliveira",
+    avatarUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150",
+    phone: "(21) 99887-7665",
+    createdAt: "2026-05-05T14:45:00Z"
+  }
+];
+
+const INITIAL_PRODUCTS: Product[] = [
+  {
+    id: "prod-1",
+    userId: "user-seller-2",
+    title: "iPhone 13 Pro Max 256GB",
+    description: "Aparelho em excelente estado de conservação, sem marcas de uso. Acompanha caixa original e cabo original. Único dono, sempre usado com capa e película protetora.",
+    price: 3800,
+    brand: "Apple",
+    model: "iPhone 13 Pro Max",
+    batteryHealth: 87,
+    storage: "256GB",
+    images: ["https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht"],
+    location: "São Paulo, SP",
+    isFeatured: true,
+    createdAt: "2026-05-27T10:00:00Z"
+  },
+  {
+    id: "prod-2",
+    userId: "user-seller-3",
+    title: "Samsung Galaxy S21 Ultra",
+    description: "Modelo topo de linha com câmeras fantásticas de até 100x de zoom. Tela perfeita sem riscos, memória de 512GB para armazenar todas as suas fotos e vídeos. Acompanha carregador rápido.",
+    price: 2450,
+    brand: "Samsung",
+    model: "Galaxy S21 Ultra",
+    batteryHealth: 92,
+    storage: "512GB",
+    images: ["https://lh3.googleusercontent.com/aida-public/AB6AXuBp6MX-rQosrE7hr4MRqk76ezQ692T72Fbg6UFynfH3X-Ag96Lf5brEGGzIOeaLHZNXnLQSvthqzUSfMcaL_KDVuvn0O1liA83wfGoJzQmdpdaSjbVa_X9Uj3WOTeaFPO8ecfaB6YgRaHWw_DbNRhxuYf7SPW5zy65EE7aPMtBZFroiQTQq7Vo-LYBR53FP9gxE6ivwc6k-4ZlYEHCx9x5A4ncAUkKcdfi161D-RLdZqYZ2psIj1HMaZRBecdPxoRqHCi1vHe3gmHmJ"],
+    location: "Curitiba, PR",
+    isFeatured: false,
+    createdAt: "2026-05-26T15:30:00Z"
+  },
+  {
+    id: "prod-3",
+    userId: "user-seller-2",
+    title: "Google Pixel 6 Pro 128GB",
+    description: "Experiência Android pura com a melhor inteligência artificial de fotografia do Google Tensor. Aparelho importado, em estado de novo. Bateria impecável.",
+    price: 1900,
+    brand: "Google",
+    model: "Pixel 6 Pro",
+    batteryHealth: 89,
+    storage: "128GB",
+    images: ["https://lh3.googleusercontent.com/aida-public/AB6AXuDylhGhSPFzQ1UaObLEzMyneaTBT7yjrjigPKCvN_NLxj7aVPW8xVLaaInLW-T9SqjIeLJEIWdbt6r9bqJpEaLqbov-m1cPpfC2R6wyPJ2qui-5AU6GbJ9qMMl1kXBMlX0YC3WFFyqDI5xDiAKIHotAAzUp6bbIqKOpDykPMSnAdYv4fojkmwBtJ_Jlgox61e5aEwG5qmBRlZ-F4olg62J6VD_2JWX250vH08kZBU6sIim6sAru5MTGvwpNNu0KnM7P2N5NSAGUZL2y"],
+    location: "Rio de Janeiro, RJ",
+    isFeatured: false,
+    createdAt: "2026-05-27T13:00:00Z"
+  },
+  {
+    id: "prod-4",
+    userId: "user-seller-3",
+    title: "Xiaomi Mi 11 Ultra 256GB",
+    description: "Modelo premium com tela traseira secundária, sensor fotográfico gigantesco, super fluidez com 12GB de memória RAM. Um verdadeiro canhão de desempenho.",
+    price: 2200,
+    brand: "Xiaomi",
+    model: "Mi 11 Ultra",
+    batteryHealth: 90,
+    storage: "256GB",
+    images: ["https://lh3.googleusercontent.com/aida-public/AB6AXuAf5SGQePGGN1kaCvpDQ44RQltdOo45_Iu3dTGLoSnanUNXVSwOwaYuEPgeTYI4Cl0dcYtk-N4Z405XgOA9iJIUKnudTzK7UkVVCeBYqFOfGwYluCQQDpv0SnfquergTQGWz6gac7tNJJ4q2Ic_pTohvGGMomyaA3a7H3FIAgf6rAYD3RUH34MusOAu2y_sUmc1F-I5E4PQ5A_JKB8YX6AkH-GYDc8-wHCMmzdmQfAGjjzXzgK4SAiDbWRIfCuMnyv5Msgl0z6Xo8QB"],
+    location: "Belo Horizonte, MG",
+    isFeatured: true,
+    createdAt: "2026-05-27T14:45:00Z"
+  }
+];
+
+const INITIAL_CHATS: Chat[] = [
+  {
+    id: "chat-1",
+    buyerId: "user-buyer-1",
+    sellerId: "user-seller-2",
+    productId: "prod-1",
+    createdAt: "2026-05-27T11:00:00Z"
+  }
+];
+
+const INITIAL_MESSAGES: Message[] = [
+  {
+    id: "msg-1",
+    chatId: "chat-1",
+    senderId: "user-buyer-1",
+    text: "Olá Marcos! O iPhone ainda está disponível? Qual a saúde real da bateria?",
+    createdAt: "2026-05-27T11:02:00Z"
+  },
+  {
+    id: "msg-2",
+    chatId: "chat-1",
+    senderId: "user-seller-2",
+    text: "Olá Carol, tudo bom? Está disponível sim! A bateria está com 87% de capacidade máxima. Durando o dia todo tranquilamente para uso geral.",
+    createdAt: "2026-05-27T11:05:00Z"
+  },
+  {
+    id: "msg-3",
+    chatId: "chat-1",
+    senderId: "user-buyer-1",
+    text: "Excelente. Você aceitaria encontro presencial para entrega em shopping de São Paulo por segurança?",
+    createdAt: "2026-05-27T11:10:00Z"
+  },
+  {
+    id: "msg-4",
+    chatId: "chat-1",
+    senderId: "user-seller-2",
+    text: "Sim, com certeza! Costumo entregar no Shopping Center Norte aos finais de semana e no Shopping Paulista durante a semana. O que fica melhor pra você?",
+    createdAt: "2026-05-27T11:14:00Z"
+  }
+];
+
+export default function App() {
+  const [isPending, startTransition] = useTransition();
+  
+  // Real dynamic states simulating a mini PostgreSQL database driven by standard hooks
+  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [chats, setChats] = useState<Chat[]>(INITIAL_CHATS);
+  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+
+  // Interface states
+  const [selectedCategory, setSelectedCategory] = useState<string>("Todos");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [newsletterEmail, setNewsletterEmail] = useState<string>("");
+  const [newsletterSubscribed, setNewsletterSubscribed] = useState<boolean>(false);
+  
+  // Developer Dashboard options
+  const [showDevPanel, setShowDevPanel] = useState<boolean>(false);
+  const [activeDevTab, setActiveDevTab] = useState<"prisma" | "express" | "sim-db" | "auth" | "ads" | "chat" | "frontend">("prisma");
+  const [activeAuthSubTab, setActiveAuthSubTab] = useState<"middleware" | "controller" | "routes">("middleware");
+  const [activeAdsSubTab, setActiveAdsSubTab] = useState<"controller" | "routes">("controller");
+  const [activeChatSubTab, setActiveChatSubTab] = useState<"controller" | "routes">("controller");
+  const [activeFrontSubTab, setActiveFrontSubTab] = useState<"api" | "auth-context" | "navbar" | "home" | "supabase" | "ad-detail" | "chat" | "anunciar">("api");
+  const [copiedFile, setCopiedFile] = useState<string | null>(null);
+
+  // Active details / modal states
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [showAnnounceModal, setShowAnnounceModal] = useState<boolean>(false);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [typedMessage, setTypedMessage] = useState<string>("");
+
+  // New Ad form state
+  const [newAd, setNewAd] = useState({
+    title: "",
+    description: "",
+    price: "",
+    brand: "Apple",
+    model: "",
+    batteryHealth: "90",
+    storage: "128GB",
+    location: "São Paulo, SP",
+    isFeatured: false,
+    imagePreset: "https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht"
+  });
+
+  // Action helpers
+  const handleCopyCode = (filename: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedFile(filename);
+    setTimeout(() => {
+      setCopiedFile(null);
+    }, 2000);
+  };
+
+  const handleCreateAd = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAd.title || !newAd.price || !newAd.model) {
+      alert("Por favor preencha os campos obrigatórios (Título, Preço e Modelo).");
+      return;
+    }
+
+    const priceNum = parseFloat(newAd.price);
+    if (isNaN(priceNum)) {
+      alert("Insira um preço válido.");
+      return;
+    }
+
+    const generatedId = `prod-custom-${Date.now()}`;
+    const newProductRecord: Product = {
+      id: generatedId,
+      userId: "user-buyer-1", // Logged user model
+      title: newAd.title,
+      description: newAd.description || "Nenhuma descrição fornecida.",
+      price: priceNum,
+      brand: newAd.brand,
+      model: newAd.model,
+      batteryHealth: newAd.batteryHealth ? parseInt(newAd.batteryHealth) : undefined,
+      storage: newAd.storage,
+      images: [newAd.imagePreset],
+      location: newAd.location,
+      isFeatured: newAd.isFeatured,
+      createdAt: new Date().toISOString()
+    };
+
+    setProducts([newProductRecord, ...products]);
+    setShowAnnounceModal(false);
+    
+    // Auto reset form
+    setNewAd({
+      title: "",
+      description: "",
+      price: "",
+      brand: "Apple",
+      model: "",
+      batteryHealth: "90",
+      storage: "128GB",
+      location: "São Paulo, SP",
+      isFeatured: false,
+      imagePreset: "https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht"
+    });
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!typedMessage.trim() || !activeChatId) return;
+
+    const newMsg: Message = {
+      id: `msg-${Date.now()}`,
+      chatId: activeChatId,
+      senderId: "user-buyer-1", // Buyer is typing
+      text: typedMessage,
+      createdAt: new Date().toISOString()
+    };
+
+    setMessages([...messages, newMsg]);
+    setTypedMessage("");
+
+    // Simulate auto seller reply in 1.5 seconds for extra premium interactive experience
+    const activeChat = chats.find(c => c.id === activeChatId);
+    if (activeChat) {
+      const seller = users.find(u => u.id === activeChat.sellerId);
+      setTimeout(() => {
+        const replyMsg: Message = {
+          id: `msg-${Date.now() + 1}`,
+          chatId: activeChatId,
+          senderId: activeChat.sellerId,
+          text: `[Mensagem Automática Simulação] Olá! Recebi sua mensagem: "${newMsg.text.substring(0, 20)}...". Em breve entrarei em contato pelo telefone ${seller?.phone || '(11) 99999-9999'}. Obrigado!`,
+          createdAt: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, replyMsg]);
+      }, 1500);
+    }
+  };
+
+  // Open chat for a specific product
+  const startChatForProduct = (product: Product) => {
+    // Check if chat already exists
+    const existingChat = chats.find(c => c.productId === product.id && c.buyerId === "user-buyer-1");
+    if (existingChat) {
+      setActiveChatId(existingChat.id);
+      setSelectedProduct(null);
+      setShowDevPanel(true);
+      setActiveDevTab("sim-db");
+    } else {
+      // Create new chat session conforming to database schemas
+      const newChatId = `chat-${Date.now()}`;
+      const newChatRecord: Chat = {
+        id: newChatId,
+        buyerId: "user-buyer-1",
+        sellerId: product.userId,
+        productId: product.id,
+        createdAt: new Date().toISOString()
+      };
+
+      setChats([...chats, newChatRecord]);
+      setActiveChatId(newChatId);
+      setSelectedProduct(null);
+      setShowDevPanel(true);
+      setActiveDevTab("sim-db");
+
+      // Add starter greeting text
+      const starterMsg: Message = {
+        id: `msg-${Date.now()}`,
+        chatId: newChatId,
+        senderId: "user-buyer-1",
+        text: `Olá! Tenho interesse no seu "${product.title}" anunciado por R$ ${product.price.toLocaleString('pt-BR')}.`,
+        createdAt: new Date().toISOString()
+      };
+      setMessages([...messages, starterMsg]);
+    }
+  };
+
+  const filteredProducts = products.filter(p => {
+    const matchesCategory = selectedCategory === "Todos" || 
+      (selectedCategory === "iPhone" && p.brand === "Apple") || 
+      (selectedCategory === "Samsung" && p.brand === "Samsung") ||
+      (selectedCategory === "Xiaomi" && p.brand === "Xiaomi") ||
+      (selectedCategory === "Até R$ 1.500" && p.price <= 1500) ||
+      (selectedCategory === "Bateria 90%+" && p.batteryHealth && p.batteryHealth >= 90) ||
+      (selectedCategory === "Garantia Válida" && (p.title.toLowerCase().includes("garantia") || p.description.toLowerCase().includes("garantia")));
+
+    const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.location.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchesCategory && matchesSearch;
+  });
+
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 transition-colors duration-300">
+      
+      {/* Dev Utility Bar (Highlights Backend configuration to satisfy instructions) */}
+      <div className="bg-[#141b2b] text-white py-2 px-4 flex items-center justify-between text-xs sm:px-8 border-b border-white/10 z-[60]">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span className="font-medium tracking-wide">AMB_DESENVOLVIMENTO: Node.js + Prisma (PostgreSQL)</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => { setShowDevPanel(true); setActiveDevTab("prisma"); }}
+            className="bg-primary hover:bg-blue-600 px-3 py-1 rounded-full text-white font-medium flex items-center gap-1 transition"
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Ver schema.prisma</span>
+          </button>
+          <button 
+            onClick={() => { setShowDevPanel(true); setActiveDevTab("express"); }}
+            className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded-full text-white font-medium flex items-center gap-1 transition hidden sm:flex"
+          >
+            <Server className="w-3.5 h-3.5" />
+            <span>Server.ts (API)</span>
+          </button>
+          <button 
+            onClick={() => { setShowDevPanel(true); setActiveDevTab("sim-db"); }}
+            className="bg-[#2563eb] hover:bg-blue-500 px-3 py-1 rounded-full text-white font-medium flex items-center gap-1 transition"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">Banco Simulado</span>
+            <span className="xs:hidden">Simulador</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main TopNavBar */}
+      <nav id="top-nav" className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm transition-all">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
+          
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedCategory("Todos")}>
+            <div className="bg-[#2563eb] p-1.5 rounded-lg text-white">
+              <Flame className="w-6 h-6 fill-white" />
+            </div>
+            <span className="text-xl font-bold font-title tracking-tight text-[#004ac6]">ElectroMarket</span>
+          </div>
+
+          <div className="hidden md:flex flex-1 max-w-lg relative">
+            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Pesquisar iPhone, Galaxy, Pixels..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-slate-100 hover:bg-slate-200/70 focus:bg-white focus:ring-2 focus:ring-[#2563eb] rounded-lg border border-transparent focus:border-slate-300 transition-all text-sm outline-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setShowAnnounceModal(true)}
+              className="bg-[#2563eb] text-white hover:bg-blue-700 px-5 py-2.5 rounded-lg font-semibold text-sm transition flex items-center gap-1.5 active:scale-95 duration-100 shadow-md"
+            >
+              <PlusCircle className="w-4.5 h-4.5" />
+              <span>Anunciar</span>
+            </button>
+
+            <button 
+              onClick={() => { setShowDevPanel(true); setActiveDevTab("sim-db"); }}
+              className="border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-lg font-semibold text-sm transition flex items-center gap-1.5"
+            >
+              <MessageSquare className="w-4.5 h-4.5 text-[#2563eb]" />
+              <span className="hidden lg:inline">Chats de Negociação</span>
+              {chats.length > 0 && (
+                <span className="bg-red-500 text-white w-2 h-2 rounded-full inline-block"></span>
+              )}
+            </button>
+
+            <div className="flex gap-1 ml-1">
+              <div 
+                className="p-2 hover:bg-slate-100 rounded-full cursor-pointer relative"
+                onClick={() => { setShowDevPanel(true); setActiveDevTab("sim-db"); }}
+              >
+                <ShoppingCart className="w-5 h-5 text-slate-600" />
+                <span className="absolute top-1 right-1 bg-[#2563eb] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {products.length}
+                </span>
+              </div>
+              <div 
+                className="p-2 hover:bg-slate-100 rounded-full cursor-pointer"
+                onClick={() => { setShowDevPanel(true); setActiveDevTab("sim-db"); }}
+              >
+                <UserIcon className="w-5 h-5 text-slate-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex-grow w-full py-6">
+        
+        {/* Responsive Search for mobile view */}
+        <div className="mb-6 md:hidden relative">
+          <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input 
+            type="text" 
+            placeholder="Pesquisar iPhone, Galaxy, Pixels..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-lg text-sm outline-none shadow-sm focus:ring-2 focus:ring-[#2563eb]"
+          />
+        </div>
+
+        {/* Categories Chips */}
+        <div className="flex items-center gap-2.5 overflow-x-auto pb-4 mb-8 -mx-4 px-4 scrollbar-thin scrollbar-thumb-slate-300">
+          {[
+            { id: "Todos", label: "Todos", icon: null },
+            { id: "iPhone", label: "iPhone", icon: <Smartphone className="w-4 h-4" /> },
+            { id: "Samsung", label: "Samsung", icon: <Smartphone className="w-4 h-4" /> },
+            { id: "Xiaomi", label: "Xiaomi", icon: null },
+            { id: "Até R$ 1.500", label: "Até R$ 1.500", icon: <Package className="w-4 h-4" /> },
+            { id: "Bateria 90%+", label: "Bateria 90%+", icon: <CheckCircle className="w-4 h-4" /> },
+            { id: "Garantia Válida", label: "Garantia Válida", icon: null },
+          ].map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold transition whitespace-nowrap border cursor-pointer border-slate-200 shadow-sm ${
+                selectedCategory === cat.id 
+                ? 'bg-slate-900 border-slate-900 text-white' 
+                : 'bg-white text-slate-700 hover:bg-slate-100 hover:border-slate-300'
+              }`}
+            >
+              {cat.icon}
+              <span>{cat.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Page Content Headers */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold font-title text-slate-900">Anúncios Recentes</h2>
+            <p className="text-sm text-slate-500">Eletrônicos inspecionados com procedência e garantia</p>
+          </div>
+          <span className="text-sm font-semibold text-[#2563eb] flex items-center gap-0.5 hover:underline cursor-pointer">
+            {filteredProducts.length} itens encontrados
+          </span>
+        </div>
+
+        {/* Empty Search Result feedback */}
+        {filteredProducts.length === 0 && (
+          <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm my-8">
+            <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <h3 className="text-lg font-bold text-slate-800">Nenhum anúncio localizado</h3>
+            <p className="text-slate-500 max-w-md mx-auto text-sm mt-1">
+              Não encontramos nenhum produto que coincida com a categoria "{selectedCategory}" ou termo de busca "{searchQuery}". Tente redefinir os filtros.
+            </p>
+            <button 
+              onClick={() => { setSelectedCategory("Todos"); setSearchQuery(""); }}
+              className="mt-4 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-800 transition"
+            >
+              Limpar Filtros
+            </button>
+          </div>
+        )}
+
+        {/* Products Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          {filteredProducts.map(product => {
+            const seller = users.find(u => u.id === product.userId);
+            return (
+              <div 
+                key={product.id}
+                className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm group hover:shadow-lg transition-all transform hover:-translate-y-1 relative duration-200 cursor-pointer"
+                onClick={() => setSelectedProduct(product)}
+              >
+                {/* Image & tag wrapper */}
+                <div className="relative aspect-square overflow-hidden bg-slate-100">
+                  <img 
+                    src={product.images[0]} 
+                    alt={product.title}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  
+                  {/* Badges */}
+                  {product.isFeatured && (
+                    <span className="absolute top-3 left-3 bg-[#141b2b]/95 text-white text-[10px] uppercase font-extrabold px-2 py-0.5 rounded tracking-wide shadow-md flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-400 fill-amber-400" />
+                      <span>Destaque</span>
+                    </span>
+                  )}
+                  
+                  {product.price <= 2000 && !product.isFeatured && (
+                    <span className="absolute top-3 left-3 bg-rose-600 font-extrabold text-[#fff] text-[10px] uppercase px-2 py-0.5 rounded tracking-wide shadow-md">
+                      Oportunidade
+                    </span>
+                  )}
+
+                  {/* Battery Health Display Badge */}
+                  {product.batteryHealth && (
+                    <span className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm text-slate-800 text-[11px] font-bold px-2 py-1 rounded shadow-sm border border-slate-200">
+                      Bateria: {product.batteryHealth}%
+                    </span>
+                  )}
+                </div>
+
+                {/* Info block */}
+                <div className="p-4 flex flex-col justify-between h-44">
+                  <div>
+                    <div className="text-slate-500 text-xs flex items-center gap-1 mb-1 font-medium">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{product.location}</span>
+                    </div>
+
+                    <h3 className="font-title font-bold text-base text-slate-900 group-hover:text-[#2563eb] leading-snug line-clamp-2 transition-colors">
+                      {product.title}
+                    </h3>
+                  </div>
+
+                  <div>
+                    {/* Tags */}
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {product.storage && (
+                        <span className="bg-slate-100 text-slate-600 font-mono text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-200">
+                          {product.storage}
+                        </span>
+                      )}
+                      <span className="bg-slate-100 text-slate-600 font-mono text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-200">
+                        {product.brand}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <p className="font-title font-bold text-lg text-[#004ac6]">
+                        R$ {product.price.toLocaleString('pt-BR')}
+                      </p>
+                      <button className="bg-slate-100 hover:bg-[#2563eb] hover:text-white text-slate-700 p-2 rounded-lg transition-all transform translate-y-2 group-hover:translate-y-0 opacity-80 group-hover:opacity-100">
+                        <ChevronRight className="w-4.5 h-4.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Newsletter CTA Area */}
+        <section className="bg-[#2563eb] text-white rounded-2xl p-8 sm:p-12 mb-12 flex flex-col lg:flex-row items-center justify-between gap-6 shadow-md relative overflow-hidden">
+          <div className="absolute right-0 top-0 -translate-y-12 translate-x-12 opacity-10 pointer-events-none">
+            <Smartphone className="w-96 h-96" />
+          </div>
+          
+          <div className="max-w-xl z-10">
+            <h2 className="font-title text-2xl sm:text-3xl font-bold tracking-tight mb-2">Não perca a oferta perfeita.</h2>
+            <p className="text-blue-100 text-sm sm:text-base leading-relaxed">
+              Assine para receber alertas de novos anúncios de iPhones, Samsung e outros smartphones seminovos inspecionados que cabem no seu orçamento.
+            </p>
+          </div>
+
+          <form onSubmit={(e) => { e.preventDefault(); setNewsletterSubscribed(true); }} className="w-full lg:w-auto flex flex-col sm:flex-row gap-3 z-10">
+            {!newsletterSubscribed ? (
+              <>
+                <input 
+                  type="email" 
+                  required
+                  placeholder="Seu melhor e-mail"
+                  value={newsletterEmail}
+                  onChange={(e) => setNewsletterEmail(e.target.value)}
+                  className="bg-white/15 border border-white/20 text-white placeholder-white/60 focus:bg-white focus:text-slate-950 focus:ring-2 focus:ring-white/50 rounded-lg px-4 py-3 text-sm flex-grow md:w-80 outline-none transition"
+                />
+                <button type="submit" className="bg-white text-[#2563eb] hover:bg-blue-50 px-6 py-3 rounded-lg font-bold text-sm transition active:scale-95 whitespace-nowrap shadow">
+                  Assinar Alertas
+                </button>
+              </>
+            ) : (
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 p-3.5 rounded-lg text-sm font-semibold text-emerald-300 flex items-center gap-2">
+                <CheckCircle className="w-5 h-5" />
+                <span>E-mail cadastrado! Você receberá alertas do ElectroMarket.</span>
+              </div>
+            )}
+          </form>
+        </section>
+
+      </main>
+
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl border border-slate-200 transform animate-in fade-in zoom-in-95 duration-200">
+            <div className="relative aspect-[16/10] sm:aspect-[21/9] bg-slate-100">
+              <img 
+                src={selectedProduct.images[0]} 
+                alt={selectedProduct.title}
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover"
+              />
+              <button 
+                onClick={() => setSelectedProduct(null)}
+                className="absolute top-4 right-4 bg-slate-900/80 text-white p-2 rounded-full hover:bg-slate-900 transition-colors cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+                <div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 mb-1 font-medium">
+                    <span className="bg-[#2563eb]/10 text-[#2563eb] font-semibold px-2 py-0.5 rounded">
+                      Smartphones &gt; {selectedProduct.brand}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                      {selectedProduct.location}
+                    </span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-bold font-title text-slate-900 leading-tight">
+                    {selectedProduct.title}
+                  </h3>
+                </div>
+                <div className="text-left sm:text-right shrink-0">
+                  <span className="text-xs text-slate-400 block font-medium">Preço à vista</span>
+                  <span className="text-2xl font-black font-title text-[#004ac6]">
+                    R$ {selectedProduct.price.toLocaleString('pt-BR')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 py-3 mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150">
+                  <span className="text-[10px] uppercase text-slate-400 block font-bold tracking-wider">Marca</span>
+                  <span className="text-sm font-semibold text-slate-800">{selectedProduct.brand}</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150">
+                  <span className="text-[10px] uppercase text-slate-400 block font-bold tracking-wider">Modelo</span>
+                  <span className="text-sm font-semibold text-slate-800">{selectedProduct.model}</span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150">
+                  <span className="text-[10px] uppercase text-slate-400 block font-bold tracking-wider">Saúde Bateria</span>
+                  <span className="text-sm font-semibold text-slate-800">
+                    {selectedProduct.batteryHealth ? `${selectedProduct.batteryHealth}%` : "Excelente/Nova"}
+                  </span>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150">
+                  <span className="text-[10px] uppercase text-slate-400 block font-bold tracking-wider">Armazenamento</span>
+                  <span className="text-sm font-semibold text-slate-800">{selectedProduct.storage || "N/A"}</span>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <h4 className="text-xs uppercase text-slate-400 font-bold tracking-wide mb-1">Descrição do Anunciante</h4>
+                <p className="text-slate-600 text-sm leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-150 font-sans">
+                  {selectedProduct.description}
+                </p>
+              </div>
+
+              <div className="border-t border-slate-100 pt-4 flex gap-3 justify-end">
+                <button 
+                  onClick={() => setSelectedProduct(null)}
+                  className="px-4 py-2 text-slate-500 hover:text-slate-800 font-bold text-sm"
+                >
+                  Fechar
+                </button>
+                <button 
+                  onClick={() => startChatForProduct(selectedProduct)}
+                  className="bg-[#2563eb] text-white hover:bg-blue-700 px-5 py-2.5 rounded-lg font-bold text-sm shadow transition flex items-center gap-1.5"
+                >
+                  <MessageSquare className="w-4.5 h-4.5" />
+                  <span>Negociar no Chat (Database Sim)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Announce (Create Product) Modal */}
+      {showAnnounceModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-200 transform animate-in fade-in duration-205 max-h-[90vh] flex flex-col">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <PlusCircle className="w-5 h-5 text-[#2563eb]" />
+                <h3 className="font-title font-bold text-lg">Criar Novo Anúncio (Simulação Prisma)</h3>
+              </div>
+              <button onClick={() => setShowAnnounceModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAd} className="p-6 gap-4 overflow-y-auto flex-1">
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                  Título do Anúncio *
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Ex: iPhone 14 Pro Max Excelente Estado"
+                  value={newAd.title}
+                  onChange={(e) => setNewAd({...newAd, title: e.target.value})}
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Marca *
+                  </label>
+                  <select 
+                    value={newAd.brand}
+                    onChange={(e) => setNewAd({...newAd, brand: e.target.value})}
+                    className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  >
+                    <option value="Apple">Apple (iPhone)</option>
+                    <option value="Samsung">Samsung</option>
+                    <option value="Xiaomi">Xiaomi</option>
+                    <option value="Google">Google</option>
+                    <option value="Motorola">Motorola</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Modelo do Aparelho *
+                  </label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: iPhone 14 Pro Max"
+                    value={newAd.model}
+                    onChange={(e) => setNewAd({...newAd, model: e.target.value})}
+                    className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5 mb-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Preço (R$) *
+                  </label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: 4200"
+                    value={newAd.price}
+                    onChange={(e) => setNewAd({...newAd, price: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Saúde Bateria (%)
+                  </label>
+                  <input 
+                    type="number" 
+                    min="50"
+                    max="100"
+                    placeholder="85"
+                    value={newAd.batteryHealth}
+                    onChange={(e) => setNewAd({...newAd, batteryHealth: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Armazenamento
+                  </label>
+                  <select
+                    value={newAd.storage}
+                    onChange={(e) => setNewAd({...newAd, storage: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  >
+                    <option value="64GB">64GB</option>
+                    <option value="128GB">128GB</option>
+                    <option value="256GB">256GB</option>
+                    <option value="512GB">512GB</option>
+                    <option value="1TB">1TB</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Localização (Cidade, UF)
+                  </label>
+                  <input 
+                    type="text" 
+                    value={newAd.location}
+                    onChange={(e) => setNewAd({...newAd, location: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Estilo de Imagem (Preset)
+                  </label>
+                  <select 
+                    value={newAd.imagePreset}
+                    onChange={(e) => setNewAd({...newAd, imagePreset: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  >
+                    <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht">iPhone Preset</option>
+                    <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuBp6MX-rQosrE7hr4MRqk76ezQ692T72Fbg6UFynfH3X-Ag96Lf5brEGGzIOeaLHZNXnLQSvthqzUSfMcaL_KDVuvn0O1liA83wfGoJzQmdpdaSjbVa_X9Uj3WOTeaFPO8ecfaB6YgRaHWw_DbNRhxuYf7SPW5zy65EE7aPMtBZFroiQTQq7Vo-LYBR53FP9gxE6ivwc6k-4ZlYEHCx9x5A4ncAUkKcdfi161D-RLdZqYZ2psIj1HMaZRBecdPxoRqHCi1vHe3gmHmJ">Galaxy Preset</option>
+                    <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuDylhGhSPFzQ1UaObLEzMyneaTBT7yjrjigPKCvN_NLxj7aVPW8xVLaaInLW-T9SqjIeLJEIWdbt6r9bqJpEaLqbov-m1cPpfC2R6wyPJ2qui-5AU6GbJ9qMMl1kXBMlX0YC3WFFyqDI5xDiAKIHotAAzUp6bbIqKOpDykPMSnAdYv4fojkmwBtJ_Jlgox61e5aEwG5qmBRlZ-F4olg62J6VD_2JWX250vH08kZBU6sIim6sAru5MTGvwpNNu0KnM7P2N5NSAGUZL2y">Pixel Preset</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                  Descrição Detalhada do Estado
+                </label>
+                <textarea 
+                  rows={3}
+                  placeholder="Descreva defeitos, acessórios inclusos, e condições gerais para simular na base."
+                  value={newAd.description}
+                  onChange={(e) => setNewAd({...newAd, description: e.target.value})}
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                />
+              </div>
+
+              <div className="mb-4 flex items-center gap-2 bg-slate-50 p-3 rounded-lg border border-slate-150">
+                <input 
+                  type="checkbox"
+                  id="featured-check"
+                  checked={newAd.isFeatured}
+                  onChange={(e) => setNewAd({...newAd, isFeatured: e.target.checked})}
+                  className="rounded text-[#2563eb] focus:ring-[#2563eb] w-4.5 h-4.5"
+                />
+                <label htmlFor="featured-check" className="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                  Marcar como "Destaque" (Adiciona fita especial no card do marketplace)
+                </label>
+              </div>
+
+              <div className="p-4 bg-blue-50 text-xs text-blue-800 rounded-lg border border-blue-150 flex items-start gap-2 mb-4 leading-relaxed">
+                <Info className="w-4.5 h-4.5 shrink-0 text-blue-600 mt-0.5" />
+                <div>
+                  <strong>Regra de Relacionamento no PostgreSQL:</strong> O anúncio será gravado com o seu 
+                  User ID <code>"user-buyer-1"</code>, vinculando a chave estrangeira <code>userId</code> com a tabela <code>User</code> conforme descrita nas convenções Prisma.
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAnnounceModal(false)}
+                  className="px-4 py-2 text-slate-500 hover:text-slate-800 font-bold text-sm"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="bg-[#2563eb] text-white hover:bg-blue-700 px-6 py-2 rounded-lg font-bold text-sm shadow"
+                >
+                  Salvar e Inserir no Banco
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Developer Side-Drawer / Config Panel (The crucial interactive engine) */}
+      {showDevPanel && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex justify-end">
+          <div className="bg-white w-full max-w-2xl h-screen shadow-2xl flex flex-col transform animate-in slide-in-from-right duration-250 border-l border-slate-200">
+            
+            {/* Header */}
+            <div className="bg-[#141b2b] text-white p-5 flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Terminal className="text-blue-400 w-5 h-5 animate-pulse" />
+                <div>
+                  <h3 className="font-title font-bold text-base leading-tight">Módulo de Controle do Back-end</h3>
+                  <p className="text-[11px] text-slate-400 font-mono tracking-tight">ElectroMarket Boilerplate Tools v1.0.0</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowDevPanel(false)}
+                className="text-slate-400 hover:text-white p-1.5 hover:bg-slate-800 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Sub-navigation Tabs */}
+            <div className="bg-slate-100 border-b border-slate-200 px-4 flex gap-1 pt-2">
+              <button
+                onClick={() => setActiveDevTab("prisma")}
+                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
+                  activeDevTab === "prisma" 
+                  ? "border-[#2563eb] text-[#2563eb]" 
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <Database className="w-4 h-4" />
+                <span>schema.prisma</span>
+              </button>
+              <button
+                onClick={() => setActiveDevTab("express")}
+                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
+                  activeDevTab === "express" 
+                  ? "border-[#2563eb] text-[#2563eb]" 
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <Server className="w-4 h-4" />
+                <span>Express Server.ts</span>
+              </button>
+              <button
+                onClick={() => setActiveDevTab("auth")}
+                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
+                  activeDevTab === "auth" 
+                  ? "border-[#2563eb] text-[#2563eb]" 
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <Lock className="w-4 h-4 text-amber-500" />
+                <span>Autenticação JWT</span>
+              </button>
+              <button
+                onClick={() => setActiveDevTab("ads")}
+                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
+                  activeDevTab === "ads" 
+                  ? "border-[#2563eb] text-[#2563eb]" 
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <Package className="w-4 h-4 text-pink-500" />
+                <span>Anúncios CRUD</span>
+              </button>
+              <button
+                onClick={() => setActiveDevTab("chat")}
+                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
+                  activeDevTab === "chat" 
+                  ? "border-[#2563eb] text-[#2563eb]" 
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <MessageSquare className="w-4 h-4 text-teal-500" />
+                <span>Chat Socket.io</span>
+              </button>
+              <button
+                onClick={() => setActiveDevTab("frontend")}
+                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition ${
+                  activeDevTab === "frontend" 
+                  ? "border-[#2563eb] text-[#2563eb]" 
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <FileCode className="w-4 h-4 text-blue-500" />
+                <span>Front-end HTTP & Context</span>
+              </button>
+              <button
+                onClick={() => setActiveDevTab("sim-db")}
+                className={`px-4 py-3 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b-2 transition relative ${
+                  activeDevTab === "sim-db" 
+                  ? "border-[#2563eb] text-[#2563eb]" 
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <Database className="w-4 h-4 text-emerald-600" />
+                <span>Simulador de Dados</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-ping absolute top-2 right-2"></span>
+              </button>
+            </div>
+
+            {/* Tab Contents */}
+            <div className="flex-1 overflow-y-auto p-5 font-sans">
+              
+              {/* Prisma Schema Tab */}
+              {activeDevTab === "prisma" && (
+                <div className="flex flex-col h-full gap-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="bg-blue-100 text-[#004ac6] text-[10px] font-bold px-2 py-1 rounded">PRINTER_SCHEMA</span>
+                      <h4 className="text-sm font-bold text-slate-800 mt-1">Definições PostgreSQL com Prisma ORM</h4>
+                    </div>
+                    <button 
+                      onClick={() => handleCopyCode("schema", SCHEMA_PRISMA_CODE)}
+                      className="bg-slate-100 hover:bg-slate-250 text-slate-700 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
+                    >
+                      {copiedFile === "schema" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedFile === "schema" ? "Copiado!" : "Copiar schema.prisma"}</span>
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-150">
+                    O arquivo <code>schema.prisma</code> localizado em <code>/backend/prisma/schema.prisma</code> foi configurado com 
+                    as tabelas <strong>User</strong>, <strong>Product (Ad)</strong>, <strong>Chat</strong> e <strong>Message</strong>. 
+                    Ele estabelece relações robustas com restrições de exclusão em cascata (<i>onDelete: Cascade</i>) garantindo a integridade dos dados no banco PostgreSQL.
+                  </p>
+
+                  <div className="bg-slate-950 rounded-xl overflow-hidden shadow-inner flex-1 flex flex-col font-mono text-xs text-slate-300 relative border border-slate-800">
+                    <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800">
+                      <span>schema.prisma</span>
+                      <span>Prisma DSL - PostgreSQL</span>
+                    </div>
+                    <pre className="p-4 overflow-auto flex-1 select-all h-[400px]">
+                      {SCHEMA_PRISMA_CODE}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {/* Express Server Configuration Tab */}
+              {activeDevTab === "express" && (
+                <div className="flex flex-col h-full gap-4 animate-in fade-in duration-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-1 rounded">EXPRESS_BOOT</span>
+                      <h4 className="text-sm font-bold text-slate-800 mt-1">Servidor TypeScript & Dependências</h4>
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => handleCopyCode("server", SERVER_TS_CODE)}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1 transition active:scale-95"
+                      >
+                        {copiedFile === "server" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>server.ts</span>
+                      </button>
+                      <button 
+                        onClick={() => handleCopyCode("pkg", PACKAGE_JSON_CODE)}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1 transition active:scale-95"
+                      >
+                        {copiedFile === "pkg" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>package.json</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-1">
+                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 text-xs">
+                      <strong className="text-slate-800 block mb-0.5">Middlewares Ativos:</strong>
+                      <ul className="list-disc pl-4 text-slate-500 space-y-0.5">
+                        <li><code>cors()</code> para permitir requisições de outras origens.</li>
+                        <li><code>express.json()</code> para interpretar payloads JSON.</li>
+                      </ul>
+                    </div>
+                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 text-xs">
+                      <strong className="text-slate-800 block mb-0.5">Dependências do Back-end:</strong>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {["express", "prisma", "typescript", "dotenv", "cors", "bcrypt", "jsonwebtoken"].map(dep => (
+                          <span key={dep} className="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded text-[10px] font-mono">
+                            {dep}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950 rounded-xl overflow-hidden flex-1 flex flex-col font-mono text-xs text-slate-300 relative border border-slate-800 h-[300px]">
+                    <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800">
+                      <span>/backend/server.ts</span>
+                      <span>TypeScript + Express</span>
+                    </div>
+                    <pre className="p-4 overflow-auto flex-1 select-all">
+                      {SERVER_TS_CODE}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {/* JWT Auth Tab */}
+              {activeDevTab === "auth" && (
+                <div className="flex flex-col h-full gap-4 animate-in fade-in duration-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="bg-amber-100 text-[#b25e00] text-[10px] font-bold px-2 py-1 rounded">AUTH_JWT_MODULE</span>
+                      <h4 className="text-sm font-bold text-slate-800 mt-1">Fluxo de Registro & Login com Criptografia Bcrypt e JWT</h4>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-150">
+                    Implementamos a autenticação completa com criptografia e tokens. Veja as camadas geradas em <strong className="text-slate-700">/backend</strong>:
+                  </p>
+
+                  {/* Auth SubTabs switcher */}
+                  <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                    {[
+                      { id: "middleware", label: "authMiddleware.ts" },
+                      { id: "controller", label: "authController.ts" },
+                      { id: "routes", label: "authRoutes.ts" }
+                    ].map(sub => (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => setActiveAuthSubTab(sub.id as any)}
+                        className={`flex-1 text-center py-1.5 px-2.5 text-xs font-semibold rounded-md transition ${
+                          activeAuthSubTab === sub.id 
+                          ? "bg-white text-slate-900 shadow-sm" 
+                          : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        {sub.id === "middleware" ? "1. Middleware" : sub.id === "controller" ? "2. Controller" : "3. Routes"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Content viewer */}
+                  {(() => {
+                    const activeSub = [
+                      { id: "middleware", title: "Middleware de Verificação JWT", file: "authMiddleware.ts", path: "/backend/src/middlewares/authMiddleware.ts", code: AUTH_MIDDLEWARE_CODE, desc: "Valida o JWT recebido no cabeçalho Authorization (Bearer <token>), extrai o userId e injeta-o no fluxo do Express para proteger ações de usuários registrados." },
+                      { id: "controller", title: "Controlador de Autenticação", file: "authController.ts", path: "/backend/src/controllers/authController.ts", code: AUTH_CONTROLLER_CODE, desc: "Contém a lógica de registro (criptografando senhas com Bcrypt e salvando no Postgres através do Prisma) e login (verificando o email, validando a hash da senha e gerando e assinando os Tokens JWT válidos por 7 dias)." },
+                      { id: "routes", title: "Roteador do Express", file: "authRoutes.ts", path: "/backend/src/routes/authRoutes.ts", code: AUTH_ROUTES_CODE, desc: "Mapeia as requisições HTTP POST para /register e /login aos seus respectivos tratadores do controlador." }
+                    ].find(s => s.id === activeAuthSubTab);
+
+                    if (!activeSub) return null;
+
+                    return (
+                      <div className="flex flex-col gap-3 flex-1">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs">
+                            <span className="font-bold text-slate-800">{activeSub.title}</span>
+                            <code className="block text-[10px] text-slate-400 font-mono mt-0.5">{activeSub.path}</code>
+                          </div>
+                          <button 
+                            onClick={() => handleCopyCode(activeSub.id, activeSub.code)}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
+                          >
+                            {copiedFile === activeSub.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedFile === activeSub.id ? "Copiado!" : "Copiar Código"}</span>
+                          </button>
+                        </div>
+
+                        <p className="text-[11px] text-slate-600 leading-normal bg-amber-50/50 p-2.5 rounded-lg border border-amber-100 font-sans">
+                          {activeSub.desc}
+                        </p>
+
+                        <div className="bg-slate-950 rounded-xl overflow-hidden shadow-inner flex-1 flex flex-col font-mono text-[11px] text-slate-300 relative border border-slate-800">
+                          <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800 border-t-0">
+                            <span>{activeSub.file}</span>
+                            <span>TypeScript</span>
+                          </div>
+                          <pre className="p-4 overflow-auto flex-1 select-all h-[320px]">
+                            {activeSub.code}
+                          </pre>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Ads CRUD Tab */}
+              {activeDevTab === "ads" && (
+                <div className="flex flex-col h-full gap-4 animate-in fade-in duration-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="bg-pink-100 text-[#c2185b] text-[10px] font-bold px-2 py-1 rounded">ADS_CRUD_MODULE</span>
+                      <h4 className="text-sm font-bold text-slate-800 mt-1">CRUD Completo de Anúncios de Smartfones & Eletrônicos</h4>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-150">
+                    O back-end possui suporte a operações CRUD inteligentes conectadas ao Prisma ORM em <strong className="text-slate-700">/backend</strong>:
+                  </p>
+
+                  {/* Ads SubTabs switcher */}
+                  <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                    {[
+                      { id: "controller", label: "adController.ts" },
+                      { id: "routes", label: "adRoutes.ts" }
+                    ].map(sub => (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => setActiveAdsSubTab(sub.id as any)}
+                        className={`flex-1 text-center py-1.5 px-2.5 text-xs font-semibold rounded-md transition ${
+                          activeAdsSubTab === sub.id 
+                          ? "bg-white text-slate-900 shadow-sm" 
+                          : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        {sub.id === "controller" ? "1. Controller (adController.ts)" : "2. Router (adRoutes.ts)"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Content viewer */}
+                  {(() => {
+                    const activeSub = [
+                      { id: "controller", title: "Controlador de Anúncios", file: "adController.ts", path: "/backend/src/controllers/adController.ts", code: AD_CONTROLLER_CODE, desc: "Processa requisições para criar (capturando autorização com o userId injetado pelo middleware), listar todos os anúncios com suporte a múltiplos filtros por query params (marca, faixa de preços, armazenamento, etc), buscar por id integrando detalhes do vendedor, atualizar dados se o usuário for o dono e deletar." },
+                      { id: "routes", title: "Roteador do Endpoint de Anúncios", file: "adRoutes.ts", path: "/backend/src/routes/adRoutes.ts", code: AD_ROUTES_CODE, desc: "Mapeia as requisições HTTP correspondentes (GET, POST, PUT, DELETE) e aplica de forma estrita o barramento de segurança com o authMiddleware para operações de escrita ou exclusão." }
+                    ].find(s => s.id === activeAdsSubTab);
+
+                    if (!activeSub) return null;
+
+                    return (
+                      <div className="flex flex-col gap-3 flex-1">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs">
+                            <span className="font-bold text-slate-800">{activeSub.title}</span>
+                            <code className="block text-[10px] text-slate-400 font-mono mt-0.5">{activeSub.path}</code>
+                          </div>
+                          <button 
+                            onClick={() => handleCopyCode(activeSub.id, activeSub.code)}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
+                          >
+                            {copiedFile === activeSub.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedFile === activeSub.id ? "Copiado!" : "Copiar Código"}</span>
+                          </button>
+                        </div>
+
+                        <p className="text-[11px] text-slate-600 leading-normal bg-pink-50/50 p-2.5 rounded-lg border border-pink-100 font-sans">
+                          {activeSub.desc}
+                        </p>
+
+                        <div className="bg-slate-950 rounded-xl overflow-hidden shadow-inner flex-1 flex flex-col font-mono text-[11px] text-slate-300 relative border border-slate-800">
+                          <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800 border-t-0">
+                            <span>{activeSub.file}</span>
+                            <span>TypeScript</span>
+                          </div>
+                          <pre className="p-4 overflow-auto flex-1 select-all h-[320px]">
+                            {activeSub.code}
+                          </pre>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Chat Socket.io Tab */}
+              {activeDevTab === "chat" && (
+                <div className="flex flex-col h-full gap-4 animate-in fade-in duration-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="bg-emerald-100 text-[#059669] text-[10px] font-bold px-2 py-1 rounded font-mono">CHAT_SOCKET_IO_MODULE</span>
+                      <h4 className="text-sm font-bold text-slate-800 mt-1">Mensageria em Tempo Real via Sockets (Socket.io) e Prisma</h4>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-150">
+                    O WebSocket estabelece uma conexão persistente e bidirecional em tempo real, gravando instantaneamente as mensagens no PostgreSQL via Prisma:
+                  </p>
+
+                  {/* Chat SubTabs switcher */}
+                  <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                    {[
+                      { id: "controller", label: "chatController.ts" },
+                      { id: "routes", label: "chatRoutes.ts" }
+                    ].map(sub => (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => setActiveChatSubTab(sub.id as any)}
+                        className={`flex-1 text-center py-1.5 px-2.5 text-xs font-semibold rounded-md transition ${
+                          activeChatSubTab === sub.id 
+                          ? "bg-white text-slate-900 shadow-sm" 
+                          : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        {sub.id === "controller" ? "1. Controller" : "2. Router"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Content viewer */}
+                  {(() => {
+                    const activeSub = [
+                      { id: "controller", title: "Controlador de Chat", file: "chatController.ts", path: "/backend/src/controllers/chatController.ts", code: CHAT_CONTROLLER_CODE, desc: "Gerencia a persistência de salas de chat entre compradores e vendedores para um smartphone ou eletrônico específico, bem como retorna o histórico ordenado de mensagens do chat." },
+                      { id: "routes", title: "Rotas de Chat", file: "chatRoutes.ts", path: "/backend/src/routes/chatRoutes.ts", code: CHAT_ROUTES_CODE, desc: "Cria endpoints HTTP de suporte ao WebSocket, garantindo acesso seguro aos chats (getUserChats, getOrCreateChat, getChatMessages) protegidos pelo authMiddleware." }
+                    ].find(s => s.id === activeChatSubTab);
+
+                    if (!activeSub) return null;
+
+                    return (
+                      <div className="flex flex-col gap-3 flex-1">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs">
+                            <span className="font-bold text-slate-800">{activeSub.title}</span>
+                            <code className="block text-[10px] text-slate-400 font-mono mt-0.5">{activeSub.path}</code>
+                          </div>
+                          <button 
+                            onClick={() => handleCopyCode(activeSub.id, activeSub.code)}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-750 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
+                          >
+                            {copiedFile === activeSub.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedFile === activeSub.id ? "Copiado!" : "Copiar Código"}</span>
+                          </button>
+                        </div>
+
+                        <p className="text-[11px] text-slate-600 leading-normal bg-emerald-50/50 p-2.5 rounded-lg border border-emerald-100 font-sans">
+                          {activeSub.desc}
+                        </p>
+
+                        <div className="bg-slate-950 rounded-xl overflow-hidden shadow-inner flex-1 flex flex-col font-mono text-[11px] text-slate-300 relative border border-slate-800">
+                          <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800 border-t-0">
+                            <span>{activeSub.file}</span>
+                            <span>TypeScript</span>
+                          </div>
+                          <pre className="p-4 overflow-auto flex-1 select-all h-[320px]">
+                            {activeSub.code}
+                          </pre>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Front-end HTTP & Context Tab */}
+              {activeDevTab === "frontend" && (
+                <div className="flex flex-col h-full gap-4 animate-in fade-in duration-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="bg-blue-100 text-blue-600 text-[10px] font-bold px-2 py-1 rounded font-mono">FRONTEND_INTEGRATION_MODULE</span>
+                      <h4 className="text-sm font-bold text-slate-800 mt-1 font-sans">Conexão HTTP (Axios/Fetch) e Estado de Sessão (AuthContext)</h4>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-150 font-sans">
+                    O front-end conecta-se à API Rest gerenciando o ciclo de vida do Token JWT por localStorage/Cookies, alimentando o estado global do React:
+                  </p>
+
+                  {/* SubTabs switcher */}
+                  <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 overflow-x-auto gap-1">
+                    {[
+                      { id: "api", label: "api.ts" },
+                      { id: "auth-context", label: "AuthContext.tsx" },
+                      { id: "navbar", label: "Navbar.tsx" },
+                      { id: "home", label: "page.tsx" },
+                      { id: "ad-detail", label: "ads/[id]/page.tsx" },
+                      { id: "chat", label: "chat/page.tsx" },
+                      { id: "anunciar", label: "anunciar/page.tsx" },
+                      { id: "supabase", label: "supabase.ts" }
+                    ].map(sub => (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => setActiveFrontSubTab(sub.id as any)}
+                        className={`flex-1 text-center py-1.5 px-2 text-xs font-semibold rounded-md transition whitespace-nowrap ${
+                          activeFrontSubTab === sub.id 
+                          ? "bg-white text-slate-900 shadow-sm" 
+                          : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        {sub.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Content viewer */}
+                  {(() => {
+                    const activeSub = [
+                      { id: "api", title: "Instância de Requisição API (Fetch)", file: "api.ts", path: "/src/lib/api.ts", code: FRONT_API_CODE, desc: "Configura a base de requisições enviando automaticamente o cabeçalho Authorization Bearer JWT a cada requisição ao backend." },
+                      { id: "auth-context", title: "Provedor Global de Autenticação", file: "AuthContext.tsx", path: "/src/contexts/AuthContext.tsx", code: FRONT_AUTH_CONTEXT_CODE, desc: "Mantém os dados do usuário conectado, efetuando o Login e Registro contra o back-end, salvando os tokens persistentes de sessão." },
+                      { id: "navbar", title: "Barra de Navegação do Marketplace", file: "Navbar.tsx", path: "/src/components/Navbar.tsx", code: FRONT_NAVBAR_CODE, desc: "Apresenta a logo ElectroMarket, caixa de busca e botões condicionais de acordo com o estado do AuthContext (+Anunciar / Entrar)." },
+                      { id: "home", title: "Vitrine e Filtros da Home", file: "page.tsx", path: "/src/app/page.tsx", code: FRONT_HOME_PAGE_CODE, desc: "A página principal busca os anúncios cadastrados em tempo real, fornecendo filtros por marca/categoria rápida e permitindo pesquisa textual." },
+                      { id: "ad-detail", title: "Detalhes Dinâmicos de Anúncios", file: "page.tsx", path: "/src/app/ads/[id]/page.tsx", code: FRONT_AD_DETAIL_CODE, desc: "A rota dinâmica de detalhes busca as informações completas do aparelho, exibe uma galeria de fotos navegáveis, badges de saúde de bateria e o botão de chat com o vendedor." },
+                      { id: "chat", title: "Tela de Mensagens Real-time", file: "page.tsx", path: "/src/app/chat/page.tsx", code: FRONT_CHAT_CODE, desc: "A tela de chat em tempo real estabelece conexão permanente WebSocket via socket.io-client com o backend, lidando com envio instantâneo e recebimento de mensagens sem reload." },
+                      { id: "anunciar", title: "Formulário de Anúncio de Aparelhos", file: "page.tsx", path: "/src/app/anunciar/page.tsx", code: FRONT_ANUNCIAR_CODE, desc: "Permite que usuários logados cadastrem aparelhos de celular para venda, especificando fotos, preço, marca, saúde de bateria e localização com validações seguras." },
+                      { id: "supabase", title: "Cliente Oficial de Conexão Supabase", file: "supabase.ts", path: "/src/lib/supabase.ts", code: FRONT_SUPABASE_CODE, desc: "A instância do cliente do Supabase para inicialização e consultas em tempo real, integrando perfeitamente tabelas, autenticação integrada e canais de comunicação." }
+                    ].find(s => s.id === activeFrontSubTab);
+
+                    if (!activeSub) return null;
+
+                    return (
+                      <div className="flex flex-col gap-3 flex-1 font-sans">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs">
+                            <span className="font-bold text-slate-800">{activeSub.title}</span>
+                            <code className="block text-[10px] text-slate-400 font-mono mt-0.5">{activeSub.path}</code>
+                          </div>
+                          <button 
+                            onClick={() => handleCopyCode(activeSub.id, activeSub.code)}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-755 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
+                          >
+                            {copiedFile === activeSub.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedFile === activeSub.id ? "Copiado!" : "Copiar"}</span>
+                          </button>
+                        </div>
+
+                        <p className="text-[11px] text-slate-650 leading-normal bg-blue-50/50 p-2.5 rounded-lg border border-blue-100 font-sans">
+                          {activeSub.desc}
+                        </p>
+
+                        <div className="bg-slate-950 rounded-xl overflow-hidden shadow-inner flex-1 flex flex-col font-mono text-[11px] text-slate-300 relative border border-slate-800">
+                          <div className="bg-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800 border-t-0">
+                            <span>{activeSub.file}</span>
+                            <span>TypeScript</span>
+                          </div>
+                          <pre className="p-4 overflow-auto flex-1 select-all h-[320px]">
+                            {activeSub.code}
+                          </pre>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Live Sandbox Interactive Simulator Tab */}
+              {activeDevTab === "sim-db" && (
+                <div className="space-y-5 animate-in fade-in duration-100">
+                  <div className="bg-gradient-to-r from-slate-900 to-slate-850 text-white p-4 rounded-xl flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold flex items-center gap-1.5">
+                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                        Simulador de Transações Postgres / Prisma
+                      </h4>
+                      <p className="text-[11px] text-slate-300 mt-1 max-w-sm">
+                        As ações realizadas no marketplace geram comandos representados na árvore relacional de usuários e chats do banco.
+                      </p>
+                    </div>
+                    
+                    <button 
+                      onClick={() => {
+                        setProducts(INITIAL_PRODUCTS);
+                        setChats(INITIAL_CHATS);
+                        setMessages(INITIAL_MESSAGES);
+                        setUsers(INITIAL_USERS);
+                        setActiveChatId("chat-1");
+                      }}
+                      className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded font-semibold flex items-center gap-1"
+                      title="Resetar dados do banco simulado"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Resetar BD</span>
+                    </button>
+                  </div>
+
+                  {/* Chat Section */}
+                  <div className="border border-slate-250 rounded-xl overflow-hidden bg-slate-50 flex flex-col h-[320px]">
+                    <div className="bg-slate-100 p-3 border-b border-slate-200 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="w-4.5 h-4.5 text-[#2563eb]" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Canal de Chat Ativo (Table Message)</span>
+                      </div>
+                      <select 
+                        value={activeChatId || ""}
+                        onChange={(e) => setActiveChatId(e.target.value || null)}
+                        className="text-xs bg-white border border-slate-300 rounded px-2 py-1 outline-none font-semibold text-slate-700"
+                      >
+                        {chats.map(chat => {
+                          const buyerObj = users.find(u => u.id === chat.buyerId);
+                          const prodObj = products.find(p => p.id === chat.productId);
+                          return (
+                            <option key={chat.id} value={chat.id}>
+                              {buyerObj?.name || 'Comprador'} - {prodObj?.title || 'Produto'}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    {/* Message Box */}
+                    <div className="flex-1 p-3 overflow-y-auto space-y-3 bg-white">
+                      {activeChatId ? (
+                        messages.filter(m => m.chatId === activeChatId).map(msg => {
+                          const isMe = msg.senderId === "user-buyer-1"; // My profile (Carol Santos)
+                          const senderObj = users.find(u => u.id === msg.senderId);
+                          return (
+                            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`max-w-[85%] rounded-paragraph p-3 text-xs shadow-sm ${
+                                isMe 
+                                ? 'bg-blue-600 text-white rounded-br-none rounded-2xl' 
+                                : 'bg-slate-100 text-slate-800 rounded-bl-none rounded-2xl border border-slate-200'
+                              }`}>
+                                <div className="font-bold mb-0.5 text-[10px] opacity-80 flex items-center gap-1">
+                                  <span>{senderObj?.name || 'Usuário'}</span>
+                                  {isMe && <span className="bg-blue-800 text-white text-[8px] px-1 rounded">Você (Buyer)</span>}
+                                </div>
+                                <p>{msg.text}</p>
+                                <span className="text-[8px] opacity-60 block text-right mt-1 font-mono">
+                                  {new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-center text-slate-400 py-12 text-xs">
+                          Nenhum chat de negociação selecionado. Escolha um produto no marketplace para iniciar a conversa!
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Chat Input form */}
+                    {activeChatId && (
+                      <form onSubmit={handleSendMessage} className="p-2 bg-slate-100 border-t border-slate-200 flex gap-2">
+                        <input 
+                          type="text" 
+                          placeholder="Digite sua proposta..."
+                          value={typedMessage}
+                          onChange={(e) => setTypedMessage(e.target.value)}
+                          className="flex-grow px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white outline-none focus:ring-1 focus:ring-[#2563eb]"
+                        />
+                        <button type="submit" className="bg-[#2563eb] text-white p-1.5 px-3 rounded-lg hover:bg-blue-700 transition">
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                      </form>
+                    )}
+                  </div>
+
+                  {/* Schema Inspector */}
+                  <div className="space-y-2">
+                    <h5 className="text-xs font-bold uppercase text-slate-600 flex items-center gap-1">
+                      <Terminal className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Inspecionar Objetos de Modelo (JSON Realtime)</span>
+                    </h5>
+                    
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <div className="bg-slate-55 block p-3 rounded-xl border border-slate-200 text-center">
+                        <span className="text-lg font-black text-[#2563eb] block font-mono">{users.length}</span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight block mt-0.5">Users (Table)</span>
+                      </div>
+                      <div className="bg-slate-55 block p-3 rounded-xl border border-slate-200 text-center">
+                        <span className="text-lg font-black text-[#2563eb] block font-mono">{products.length}</span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight block mt-0.5">Products (Table)</span>
+                      </div>
+                      <div className="bg-slate-55 block p-3 rounded-xl border border-slate-200 text-center">
+                        <span className="text-lg font-black text-[#2563eb] block font-mono">{chats.length}</span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight block mt-0.5">Chats (Table)</span>
+                      </div>
+                      <div className="bg-slate-55 block p-3 rounded-xl border border-slate-200 text-center">
+                        <span className="text-lg font-black text-[#2563eb] block font-mono">{messages.length}</span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight block mt-0.5">Messages (Table)</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900 text-[#a6b1df] p-3.5 rounded-xl border border-slate-800 text-xs font-mono h-[140px] overflow-y-auto">
+                      <div className="text-[10px] text-slate-400 mb-2 border-b border-slate-800 pb-1 flex justify-between">
+                        <span>ESTADO DO COMPRADOR LOGADO ("user-buyer-1")</span>
+                        <span>PostgreSQL Row</span>
+                      </div>
+                      <pre className="text-[11px] leading-tight select-all">
+                        {JSON.stringify(users.find(u => u.id === "user-buyer-1"), null, 2)}
+                      </pre>
+                    </div>
+
+                    <div className="bg-slate-900 text-[#d372e1] p-3.5 rounded-xl border border-slate-800 text-xs font-mono h-[140px] overflow-y-auto">
+                      <div className="text-[10px] text-slate-400 mb-2 border-b border-slate-800 pb-1 flex justify-between">
+                        <span>ÚLTIMO PRODUTO SELECIONADO ("Foreign Key Verification")</span>
+                        <span>Product Row (Ad)</span>
+                      </div>
+                      <pre className="text-[11px] leading-tight select-all">
+                        {JSON.stringify(products[0], null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+            </div>
+
+            {/* Footer buttons of dev drawers */}
+            <div className="bg-slate-50 p-4 border-t border-slate-200 text-right flex justify-between items-center">
+              <span className="text-[11px] text-slate-400 font-medium">Bando de Dados: PostgreSQL local sim ativo</span>
+              <button 
+                onClick={() => setShowDevPanel(false)}
+                className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold transition"
+              >
+                Voltar ao Marketplace
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Styled Site Footer */}
+      <footer className="bg-slate-900 text-slate-400 pt-12 pb-6 mt-auto border-t border-slate-800 font-sans">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8">
+          
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-1.5 text-white">
+              <div className="bg-[#2563eb] p-1.5 rounded-lg text-white">
+                <Flame className="w-5 h-5 fill-white" />
+              </div>
+              <span className="text-lg font-bold font-title tracking-tight">ElectroMarket</span>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              O marketplace premium focado em eletrônicos de alta performance e procedência inspecionada.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            <h4 className="font-semibold text-white uppercase text-xs tracking-wider">Suporte</h4>
+            <ul className="flex flex-col gap-1.5 text-xs">
+              <li><a href="#" className="hover:text-white transition">Central de Ajuda</a></li>
+              <li><a href="#" className="hover:text-white transition">Como Comprar</a></li>
+              <li><a href="#" className="hover:text-white transition">Regras de Venda</a></li>
+              <li><a href="#" className="hover:text-white transition">Contato</a></li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            <h4 className="font-semibold text-white uppercase text-xs tracking-wider">Categorias</h4>
+            <ul className="flex flex-col gap-1.5 text-xs">
+              <li><a href="#" className="hover:text-white transition">iPhones Seminovos</a></li>
+              <li><a href="#" className="hover:text-white transition">MacBooks & iPads</a></li>
+              <li><a href="#" className="hover:text-white transition">Smartwatches</a></li>
+              <li><a href="#" className="hover:text-white transition">Acessórios Premium</a></li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            <h4 className="font-semibold text-white uppercase text-xs tracking-wider">Dicas de Segurança</h4>
+            <ul className="flex flex-col gap-1.5 text-xs">
+              <li><a href="#" className="hover:text-white transition">Verificação de IMEI</a></li>
+              <li><a href="#" className="hover:text-white transition">Pagamento Seguro</a></li>
+              <li><a href="#" className="hover:text-white transition">Encontros em Local Público</a></li>
+              <li><a href="#" className="hover:text-white transition">Dicas Gerais de Fraude</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10 pt-6 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
+          <p>© 2026 ElectroMarket Premium. Todos os direitos reservados. Projetado para Postgres e Prisma DSL.</p>
+          <div className="flex gap-4">
+            <a href="#" className="hover:text-white transition">Política de Privacidade</a>
+            <a href="#" className="hover:text-white transition">Termos de Serviço</a>
+            <a href="#" className="hover:text-white transition">Segurança do Banco</a>
+          </div>
+        </div>
+      </footer>
+
+    </div>
+  );
+}
