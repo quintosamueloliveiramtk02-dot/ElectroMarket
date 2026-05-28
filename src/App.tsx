@@ -1835,9 +1835,20 @@ export default function App() {
           formData.append('images', file);
         });
 
+        // Debug form state elements securely without exposing files binary
+        const formObj: Record<string, any> = {};
+        formData.forEach((value, key) => {
+          if (value instanceof File) {
+            formObj[key] = `File: ${value.name} (${value.size} bytes)`;
+          } else {
+            formObj[key] = value;
+          }
+        });
+        console.log("Payload enviado do Frontend (FormData):", formObj);
+
         response = await api.post<{ message: string; ad: Product }>('/ads', formData);
       } else {
-        response = await api.post<{ message: string; ad: Product }>('/ads', {
+        const payloadJson = {
           title: newAd.title,
           description: newAd.description || "Nenhuma descrição fornecida.",
           price: priceNum,
@@ -1849,13 +1860,17 @@ export default function App() {
           location: newAd.location,
           isFeatured: newAd.isFeatured,
           userId: loggedInUserId
-        });
+        };
+        console.log("Payload enviado do Frontend:", payloadJson);
+
+        response = await api.post<{ message: string; ad: Product }>('/ads', payloadJson);
       }
       
       if (response && response.ad) {
         realProduct = response.ad;
       }
     } catch (apiErr: any) {
+      console.error("Erro completo recebido no front:", apiErr.response?.data || apiErr);
       console.error("Erro ao publicar na API real. Detalhes completos do erro:", apiErr);
       alert(`Aviso: Conexão direta com a API falhou (Erro: ${apiErr?.message || apiErr}). O anúncio foi salvo localmente temporariamente.`);
     }

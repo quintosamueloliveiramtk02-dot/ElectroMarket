@@ -132,6 +132,7 @@ export default function AnunciarPage() {
         isFeatured: false
       };
 
+      console.log("Payload enviado do Frontend:", payload);
       const result = await api.post<{ ad: { id: string } }>('/ads', payload);
       
       setSuccessMessage('Parabéns! Anúncio publicado com extremo sucesso.');
@@ -142,6 +143,7 @@ export default function AnunciarPage() {
       }, 1500);
 
     } catch (err: any) {
+      console.error("Erro completo recebido no front:", err.response?.data || err);
       console.error('Erro ao anunciar o smartphone:', err);
       setErrorMessage(err.message || 'Erro ao publicar seu iPhone. Revise suas informações.');
     } finally {
