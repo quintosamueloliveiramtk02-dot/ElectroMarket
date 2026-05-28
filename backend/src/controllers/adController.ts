@@ -32,8 +32,10 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
       return;
     }
 
-    const priceFloat = parseFloat(price);
-    if (isNaN(priceFloat)) {
+    const parsedPrice = parseFloat(price);
+    const parsedBattery = batteryHealth ? parseInt(batteryHealth) : null;
+
+    if (isNaN(parsedPrice)) {
       res.status(400).json({ error: 'O preço informado deve ser um número válido' });
       return;
     }
@@ -46,24 +48,15 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
       imageUrls = Array.isArray(images) ? images : [];
     }
 
-    // Conversão de bateria (Int?) robusta contra NaN
-    let batteryHealthVal: number | null = null;
-    if (batteryHealth !== null && batteryHealth !== undefined && batteryHealth !== '') {
-      const parsedBattery = parseInt(batteryHealth, 10);
-      if (!isNaN(parsedBattery)) {
-        batteryHealthVal = parsedBattery;
-      }
-    }
-
     const ad = await prisma.product.create({
       data: {
         userId,
         title: title || "Sem título",
         description: description || '',
-        price: priceFloat,
+        price: parsedPrice,
         brand: brand || "Genérico",
         model,
-        batteryHealth: batteryHealthVal,
+        batteryHealth: parsedBattery,
         storage: storage || null,
         images: imageUrls,
         location,
@@ -77,11 +70,8 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
     });
   } catch (error: any) {
     console.error("Erro detalhado do Prisma nos Anúncios:", JSON.stringify(error, null, 2));
-    console.error("Erro completo original nos Anúncios:", error);
-    res.status(500).json({
-      error: 'Erro interno ao publicar anúncio',
-      details: error.message
-    });
+    console.error("Mensagem do erro:", error.message || error);
+    res.status(500).json({ error: "Erro interno ao criar anúncio", details: error.message });
   }
 };
 
