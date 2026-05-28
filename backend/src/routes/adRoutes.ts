@@ -16,7 +16,7 @@ cloudinary.config({
 // 2. Configurar o armazenamento do Multer direcionado para o Cloudinary de forma otimizada
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: (async (req, file) => {
+  params: (async (req: any, file: any) => {
     return {
       folder: 'electromarket-products', // Nome da pasta que será criada automaticamente no seu painel Cloudinary
       allowed_formats: ['jpg', 'png', 'webp', 'jpeg'],

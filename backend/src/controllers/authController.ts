@@ -86,8 +86,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    if (!user.passwordHash) {
+      res.status(401).json({ error: 'E-mail ou senha incorretos' });
+      return;
+    }
+
     // Comparar senhas com Bcrypt
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash || '');
 
     if (!isPasswordValid) {
       res.status(401).json({ error: 'E-mail ou senha incorretos' });
