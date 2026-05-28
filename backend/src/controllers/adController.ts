@@ -5,8 +5,8 @@ import prisma from '../lib/prisma';
 // 1. Criar um anúncio associado ao ID do usuário autenticado
 export const createAd = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, description, price, brand, model, batteryHealth, storage, images, location, isFeatured } = req.body;
-    const userId = req.userId;
+    const { title, description, price, brand, model, batteryHealth, storage, images, location, isFeatured, userId: bodyUserId } = req.body;
+    const userId = req.userId || bodyUserId;
 
     if (!userId) {
       res.status(401).json({ error: 'Usuário não autenticado ou inválido' });

@@ -119,3 +119,83 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     });
   }
 };
+
+export const syncUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id, email, name, avatarUrl, phone } = req.body;
+
+    if (!id || !email) {
+      res.status(400).json({ error: 'Campos id e email são obrigatórios para sincronizar o usuário' });
+      return;
+    }
+
+    // 1. Tentar encontrar usuário pelo id ou pelo email
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id },
+          { email }
+        ]
+      }
+    });
+
+    if (user) {
+      // Se o usuário existe mas com id diferente (ex: cadastro prévio por email tradicional),
+      // atualizamos as informações cruciais mas mantemos seu id atual para integridade referencial.
+      if (user.id !== id) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            name: name || user.name,
+            avatarUrl: avatarUrl || user.avatarUrl,
+            phone: phone || user.phone,
+          }
+        });
+      } else {
+        // IDs idênticos, atualiza as informações normais
+        user = await prisma.user.update({
+          where: { id },
+          data: {
+            email,
+            name: name || user.name,
+            avatarUrl: avatarUrl || user.avatarUrl,
+            phone: phone || user.phone,
+          }
+        });
+      }
+    } else {
+      // Cria um novo usuário se não existir nem por id nem por email
+      user = await prisma.user.create({
+        data: {
+          id,
+          email,
+          name: name || '',
+          avatarUrl,
+          phone,
+        }
+      });
+    }
+
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, {
+      expiresIn: '7d',
+    });
+
+    res.status(200).json({
+      message: 'Usuário sincronizado com sucesso!',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        avatarUrl: user.avatarUrl,
+        phone: user.phone,
+        createdAt: user.createdAt,
+      },
+      token,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Erro interno ao sincronizar usuário',
+      details: error.message
+    });
+  }
+};

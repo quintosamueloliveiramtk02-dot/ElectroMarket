@@ -1604,6 +1604,25 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
 
+  // Sincroniza informações do Google Auth com o banco principal via Prisma no Backend
+  const syncUserToBackend = async (userObj: User) => {
+    try {
+      const response = await api.post<{ message: string; user: User; token: string }>('/users/sync', {
+        id: userObj.id,
+        email: userObj.email,
+        name: userObj.name,
+        avatarUrl: userObj.avatarUrl,
+        phone: userObj.phone
+      });
+      if (response && response.token) {
+        localStorage.setItem('electromarket_token', response.token);
+      }
+      console.log('[Sync] Usuário sincronizado com o backend (PostgreSQL via Prisma) com sucesso!');
+    } catch (err) {
+      console.error('[Sync] Falha ao sincronizar perfil do Google com o backend:', err);
+    }
+  };
+
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -1624,6 +1643,8 @@ export default function App() {
             }
             return prev;
           });
+          // Sincroniza com PostgreSQL de forma transparente
+          await syncUserToBackend(userObj);
         }
       } catch (err) {
         console.error('Erro ao verificar sessão do Supabase:', err);
@@ -1631,7 +1652,7 @@ export default function App() {
     };
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const userObj: User = {
           id: session.user.id,
@@ -1648,6 +1669,8 @@ export default function App() {
           }
           return prev;
         });
+        // Sincroniza com PostgreSQL de forma transparente
+        await syncUserToBackend(userObj);
       } else {
         setCurrentUser(null);
       }
@@ -1780,7 +1803,17 @@ export default function App() {
     }
 
     // Enviar anúncio real para o backend na Render
-    const loggedInUserId = currentUser ? currentUser.id : "user-buyer-1";
+    let loggedInUserId = currentUser ? currentUser.id : "user-buyer-1";
+    try {
+      const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+      if (supabaseUser) {
+        loggedInUserId = supabaseUser.id;
+        console.log('[CreateAd] Capturado userId dinâmico da sessão ativa do Supabase:', loggedInUserId);
+      }
+    } catch (err) {
+      console.warn('[CreateAd] Erro ao obter userId dinâmico do Supabase, usando fallback:', err);
+    }
+
     let realProduct: Product | null = null;
     try {
       let response;
@@ -1795,6 +1828,7 @@ export default function App() {
         if (newAd.storage) formData.append('storage', newAd.storage);
         formData.append('location', newAd.location);
         formData.append('isFeatured', newAd.isFeatured ? 'true' : 'false');
+        formData.append('userId', loggedInUserId);
         
         // Append all selected image files to field "images" (matches upload.array('images', 5) backend middleware)
         selectedImageFiles.forEach((file) => {
@@ -1813,7 +1847,8 @@ export default function App() {
           storage: newAd.storage,
           images: [newAd.imagePreset],
           location: newAd.location,
-          isFeatured: newAd.isFeatured
+          isFeatured: newAd.isFeatured,
+          userId: loggedInUserId
         });
       }
       
@@ -2371,7 +2406,7 @@ export default function App() {
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <PlusCircle className="w-5 h-5 text-[#2563eb]" />
-                <h3 className="font-title font-bold text-lg">Criar Novo Anúncio (Simulação Prisma)</h3>
+                <h3 className="font-title font-bold text-lg">Criar Novo Anúncio</h3>
               </div>
               <button onClick={() => setShowAnnounceModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -2573,11 +2608,11 @@ export default function App() {
                 </label>
               </div>
 
-              <div className="p-4 bg-blue-50 text-xs text-blue-800 rounded-lg border border-blue-150 flex items-start gap-2 mb-4 leading-relaxed">
-                <Info className="w-4.5 h-4.5 shrink-0 text-blue-600 mt-0.5" />
+              <div className="p-4 bg-slate-50 text-xs text-slate-700 rounded-lg border border-slate-200 flex items-start gap-2 mb-4 leading-relaxed">
+                <Info className="w-4.5 h-4.5 shrink-0 text-[#2563eb] mt-0.5" />
                 <div>
-                  <strong>Regra de Relacionamento no PostgreSQL:</strong> O anúncio será gravado com o seu 
-                  User ID <code>"user-buyer-1"</code>, vinculando a chave estrangeira <code>userId</code> com a tabela <code>User</code> conforme descrita nas convenções Prisma.
+                  <strong>Identidade do Vendedor (PostgreSQL via Prisma):</strong> O anúncio será gravado com o seu 
+                  User ID <code>{currentUser ? currentUser.id : "user-buyer-1"}</code> ({currentUser ? currentUser.email : "Carol Santos"}), vinculando a chave estrangeira <code>userId</code> diretamente à tabela <code>User</code>.
                 </div>
               </div>
 

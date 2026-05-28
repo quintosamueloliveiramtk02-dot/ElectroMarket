@@ -7,6 +7,7 @@ import authRoutes from './routes/authRoutes';
 import adRoutes from './routes/adRoutes';
 import chatRoutes from './routes/chatRoutes';
 import prisma from './lib/prisma';
+import { syncUser } from './controllers/authController';
 
 // Load environment variables
 dotenv.config();
@@ -33,6 +34,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/ads', adRoutes);
 app.use('/api/chats', chatRoutes);
+app.post('/api/users/sync', syncUser);
 
 // Secure database check endpoint
 app.get('/api/debug-db', (req, res) => {
