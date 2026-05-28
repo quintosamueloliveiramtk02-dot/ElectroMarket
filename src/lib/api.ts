@@ -64,14 +64,14 @@ export const api = {
     return request<T>(endpoint, {
       ...options,
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined,
     });
   },
   put: async <T>(endpoint: string, data?: any, options?: RequestOptions): Promise<T> => {
     return request<T>(endpoint, {
       ...options,
       method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined,
     });
   },
   delete: async <T>(endpoint: string, options?: RequestOptions): Promise<T> => {

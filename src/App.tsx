@@ -33,6 +33,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { User, Product, Chat, Message } from './types';
+import { supabase } from './lib/supabaseClient';
 
 // Let's create the hardcoded database code representations to display & copy easily.
 const SCHEMA_PRISMA_CODE = `datasource db {
@@ -866,7 +867,8 @@ router.get('/:id/messages', authMiddleware, getChatMessages);
 
 export default router;`;
 
-const FRONT_API_CODE = `const API_URL = 'http://localhost:5000/api';
+const FRONT_API_CODE = `// Lê a variável de ambiente configurada na Vercel / localmente
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;
@@ -1597,6 +1599,88 @@ export default function App() {
   const [loadingAds, setLoadingAds] = useState<boolean>(true);
   const [chats, setChats] = useState<Chat[]>(INITIAL_CHATS);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  
+  // Supabase Google Auth and local login integration
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const userObj: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuário Google',
+            avatarUrl: session.user.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120px&h=120px&q=80',
+            phone: session.user.phone || '(11) 99999-9999',
+            createdAt: session.user.created_at || new Date().toISOString()
+          };
+          setCurrentUser(userObj);
+          setUsers(prev => {
+            if (!prev.find(u => u.id === userObj.id)) {
+              return [...prev, userObj];
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.error('Erro ao verificar sessão do Supabase:', err);
+      }
+    };
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const userObj: User = {
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuário Google',
+          avatarUrl: session.user.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120px&h=120px&q=80',
+          phone: session.user.phone || '(11) 99999-9999',
+          createdAt: session.user.created_at || new Date().toISOString()
+        };
+        setCurrentUser(userObj);
+        setUsers(prev => {
+          if (!prev.find(u => u.id === userObj.id)) {
+            return [...prev, userObj];
+          }
+          return prev;
+        });
+      } else {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        }
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro no login social do Google:', err.message || err);
+      alert('Erro ao iniciar login com o Google. Certifique-se de configurar VITE_SUPABASE_URL.');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Erro ao sair:', err);
+    }
+    setCurrentUser(null);
+  };
 
   // Carrega anúncios reais do backend da Render (banco Supabase) na montagem do componente
   useEffect(() => {
@@ -1648,6 +1732,7 @@ export default function App() {
     isFeatured: false,
     imagePreset: "https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht"
   });
+  const [selectedImageFiles, setSelectedImageFiles] = useState<File[]>([]);
 
 
 
@@ -1695,20 +1780,43 @@ export default function App() {
     }
 
     // Enviar anúncio real para o backend na Render
+    const loggedInUserId = currentUser ? currentUser.id : "user-buyer-1";
     let realProduct: Product | null = null;
     try {
-      const response = await api.post<{ message: string; ad: Product }>('/ads', {
-        title: newAd.title,
-        description: newAd.description || "Nenhuma descrição fornecida.",
-        price: priceNum,
-        brand: newAd.brand,
-        model: newAd.model,
-        batteryHealth: newAd.batteryHealth ? parseInt(newAd.batteryHealth) : null,
-        storage: newAd.storage,
-        images: [newAd.imagePreset],
-        location: newAd.location,
-        isFeatured: newAd.isFeatured
-      });
+      let response;
+      if (selectedImageFiles.length > 0) {
+        const formData = new FormData();
+        formData.append('title', newAd.title);
+        formData.append('description', newAd.description || "Nenhuma descrição fornecida.");
+        formData.append('price', priceNum.toString());
+        formData.append('brand', newAd.brand);
+        formData.append('model', newAd.model);
+        if (newAd.batteryHealth) formData.append('batteryHealth', newAd.batteryHealth);
+        if (newAd.storage) formData.append('storage', newAd.storage);
+        formData.append('location', newAd.location);
+        formData.append('isFeatured', newAd.isFeatured ? 'true' : 'false');
+        
+        // Append all selected image files to field "images" (matches upload.array('images', 5) backend middleware)
+        selectedImageFiles.forEach((file) => {
+          formData.append('images', file);
+        });
+
+        response = await api.post<{ message: string; ad: Product }>('/ads', formData);
+      } else {
+        response = await api.post<{ message: string; ad: Product }>('/ads', {
+          title: newAd.title,
+          description: newAd.description || "Nenhuma descrição fornecida.",
+          price: priceNum,
+          brand: newAd.brand,
+          model: newAd.model,
+          batteryHealth: newAd.batteryHealth ? parseInt(newAd.batteryHealth) : null,
+          storage: newAd.storage,
+          images: [newAd.imagePreset],
+          location: newAd.location,
+          isFeatured: newAd.isFeatured
+        });
+      }
+      
       if (response && response.ad) {
         realProduct = response.ad;
       }
@@ -1717,10 +1825,14 @@ export default function App() {
       alert("Aviso: Conexão direta com a API falhou. O anúncio foi salvo localmente temporariamente.");
     }
 
+    const localImageUrls = selectedImageFiles.length > 0
+      ? selectedImageFiles.map(file => URL.createObjectURL(file))
+      : [newAd.imagePreset];
+
     const generatedId = realProduct ? realProduct.id : `prod-custom-${Date.now()}`;
     const newProductRecord: Product = realProduct || {
       id: generatedId,
-      userId: "user-buyer-1", // Logged user model
+      userId: loggedInUserId, // Dynamic logged user model
       title: newAd.title,
       description: newAd.description || "Nenhuma descrição fornecida.",
       price: priceNum,
@@ -1728,7 +1840,7 @@ export default function App() {
       model: newAd.model,
       batteryHealth: newAd.batteryHealth ? parseInt(newAd.batteryHealth) : undefined,
       storage: newAd.storage,
-      images: [newAd.imagePreset],
+      images: localImageUrls,
       location: newAd.location,
       isFeatured: newAd.isFeatured,
       createdAt: new Date().toISOString()
@@ -1737,7 +1849,8 @@ export default function App() {
     setProducts(prevProducts => [newProductRecord, ...prevProducts]);
     setShowAnnounceModal(false);
     
-    // Auto reset form
+    // Auto reset form and state
+    setSelectedImageFiles([]);
     setNewAd({
       title: "",
       description: "",
@@ -1885,9 +1998,10 @@ export default function App() {
               )}
             </button>
 
-            <div className="flex gap-1 ml-1">
+            <div className="flex items-center gap-2 ml-1">
               <div 
                 className="p-2 hover:bg-slate-100 rounded-full cursor-pointer relative"
+                title="Carrinho de Compras / Chats"
                 onClick={() => { setShowChatModal(true); if (chats.length > 0 && !activeChatId) setActiveChatId(chats[0].id); }}
               >
                 <ShoppingCart className="w-5 h-5 text-slate-600" />
@@ -1895,12 +2009,40 @@ export default function App() {
                   {products.length}
                 </span>
               </div>
-              <div 
-                className="p-2 hover:bg-slate-100 rounded-full cursor-pointer"
-                onClick={() => { setShowChatModal(true); if (chats.length > 0 && !activeChatId) setActiveChatId(chats[0].id); }}
-              >
-                <UserIcon className="w-5 h-5 text-slate-600" />
-              </div>
+
+              {currentUser ? (
+                <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={currentUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80px&h=80px&q=80'}
+                      alt={currentUser.name}
+                      referrerPolicy="no-referrer"
+                      className="w-8 h-8 rounded-full border border-slate-200 object-cover"
+                    />
+                    <div className="hidden lg:block text-left max-w-[120px]">
+                      <p className="text-xs font-semibold text-slate-800 leading-tight truncate">
+                        {currentUser.name}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="text-[10px] text-slate-400 hover:text-red-500 font-medium transition cursor-pointer flex items-center gap-0.5"
+                      >
+                        Sair
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowLoginModal(true)}
+                  className="bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-200 px-4 py-2 rounded-xl font-semibold text-sm transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <UserIcon className="w-4 h-4 text-blue-600" />
+                  <span>Entrar</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -2329,32 +2471,80 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
-                    Localização (Cidade, UF)
-                  </label>
-                  <input 
-                    type="text" 
-                    value={newAd.location}
-                    onChange={(e) => setNewAd({...newAd, location: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                  Localização (Cidade, UF) *
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Ex: São Paulo, SP"
+                  value={newAd.location}
+                  onChange={(e) => setNewAd({...newAd, location: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                />
+              </div>
+
+              {/* Photos area supporting draggable upload via Cloudinary & fallback presets */}
+              <div className="mb-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl p-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 text-left">
+                  Fotos do Aparelho (Upload Cloudinary)
+                </label>
+                
+                <div className="flex flex-col items-center justify-center py-4 px-2 border-2 border-dashed border-slate-200 bg-white rounded-lg hover:bg-slate-100/50 transition relative cursor-pointer group">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        const filesArray = Array.from(e.target.files);
+                        setSelectedImageFiles(prev => [...prev, ...filesArray].slice(0, 5));
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                   />
+                  <PlusCircle className="w-8 h-8 text-blue-500 mb-1.5 group-hover:scale-105 transition duration-150" />
+                  <span className="text-xs font-semibold text-slate-700">Escolher ou arrastar fotos</span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">Até 5 fotos (JPG, PNG, WEBP)</span>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
-                    Estilo de Imagem (Preset)
-                  </label>
-                  <select 
-                    value={newAd.imagePreset}
-                    onChange={(e) => setNewAd({...newAd, imagePreset: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
-                  >
-                    <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht">iPhone Preset</option>
-                    <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuBp6MX-rQosrE7hr4MRqk76ezQ692T72Fbg6UFynfH3X-Ag96Lf5brEGGzIOeaLHZNXnLQSvthqzUSfMcaL_KDVuvn0O1liA83wfGoJzQmdpdaSjbVa_X9Uj3WOTeaFPO8ecfaB6YgRaHWw_DbNRhxuYf7SPW5zy65EE7aPMtBZFroiQTQq7Vo-LYBR53FP9gxE6ivwc6k-4ZlYEHCx9x5A4ncAUkKcdfi161D-RLdZqYZ2psIj1HMaZRBecdPxoRqHCi1vHe3gmHmJ">Galaxy Preset</option>
-                    <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuDylhGhSPFzQ1UaObLEzMyneaTBT7yjrjigPKCvN_NLxj7aVPW8xVLaaInLW-T9SqjIeLJEIWdbt6r9bqJpEaLqbov-m1cPpfC2R6wyPJ2qui-5AU6GbJ9qMMl1kXBMlX0YC3WFFyqDI5xDiAKIHotAAzUp6bbIqKOpDykPMSnAdYv4fojkmwBtJ_Jlgox61e5aEwG5qmBRlZ-F4olg62J6VD_2JWX250vH08kZBU6sIim6sAru5MTGvwpNNu0KnM7P2N5NSAGUZL2y">Pixel Preset</option>
-                  </select>
-                </div>
+
+                {selectedImageFiles.length > 0 ? (
+                  <div className="mt-3 text-left space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Arquivos selecionados ({selectedImageFiles.length}):</span>
+                    {selectedImageFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-800 shadow-xs">
+                        <span className="truncate max-w-[240px] font-mono text-[11px]">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedImageFiles(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-red-500 hover:text-red-700 text-[10px] uppercase font-bold tracking-wider hover:underline ml-2"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    ))}
+                    <p className="text-[10.5px] text-emerald-600 font-semibold flex items-center gap-1 mt-2">
+                      <Check className="w-3.5 h-3.5 shrink-0" />
+                      <span>Fotos prontas para upload via Cloudinary!</span>
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-3 text-left border-t border-slate-200 pt-2.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 leading-normal">
+                      Ou use Preset como Fallback se preferir não subir arquivos
+                    </label>
+                    <select 
+                      value={newAd.imagePreset}
+                      onChange={(e) => setNewAd({...newAd, imagePreset: e.target.value})}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white outline-none focus:ring-1 focus:ring-[#2563eb]"
+                    >
+                      <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht">iPhone Preset</option>
+                      <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuBp6MX-rQosrE7hr4MRqk76ezQ692T72Fbg6UFynfH3X-Ag96Lf5brEGGzIOeaLHZNXnLQSvthqzUSfMcaL_KDVuvn0O1liA83wfGoJzQmdpdaSjbVa_X9Uj3WOTeaFPO8ecfaB6YgRaHWw_DbNRhxuYf7SPW5zy65EE7aPMtBZFroiQTQq7Vo-LYBR53FP9gxE6ivwc6k-4ZlYEHCx9x5A4ncAUkKcdfi161D-RLdZqYZ2psIj1HMaZRBecdPxoRqHCi1vHe3gmHmJ">Galaxy Preset</option>
+                      <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuDylhGhSPFzQ1UaObLEzMyneaTBT7yjrjigPKCvN_NLxj7aVPW8xVLaaInLW-T9SqjIeLJEIWdbt6r9bqJpEaLqbov-m1cPpfC2R6wyPJ2qui-5AU6GbJ9qMMl1kXBMlX0YC3WFFyqDI5xDiAKIHotAAzUp6bbIqKOpDykPMSnAdYv4fojkmwBtJ_Jlgox61e5aEwG5qmBRlZ-F4olg62J6VD_2JWX250vH08kZBU6sIim6sAru5MTGvwpNNu0KnM7P2N5NSAGUZL2y">Pixel Preset</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="mb-4">
@@ -2407,6 +2597,85 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Login Modal (Supabase integrated) */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-200 transform animate-in fade-in zoom-in-95 duration-200 animate-duration-200">
+            
+            {/* Header */}
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-[#2563eb]" />
+                <h3 className="font-title font-bold text-base">Acesse sua Conta</h3>
+              </div>
+              <button 
+                onClick={() => setShowLoginModal(false)}
+                className="text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 flex flex-col gap-5">
+              <div className="text-center">
+                <div className="bg-blue-50 text-blue-600 p-2.5 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 border border-blue-100">
+                  <Flame className="w-6 h-6 fill-blue-600" />
+                </div>
+                <h4 className="font-bold text-slate-800 text-sm">Bem-vindo ao ElectroMarket</h4>
+                <p className="text-xs text-slate-500 mt-1">Conecte-se para gerenciar seus chats e criar anúncios reais.</p>
+              </div>
+
+              {/* Real Google Button requested by user */}
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold py-2.5 px-4 rounded-xl text-sm transition shadow-sm cursor-pointer hover:shadow-md duration-150 active:scale-95"
+              >
+                {/* Embedded SVG Google Icon for beautiful visual accuracy */}
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                  <path d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.62z" fill="#FBBC05" />
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                </svg>
+                <span>Continuar com o Google</span>
+              </button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-200"></div>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-slate-400 font-semibold tracking-wider text-[10px]">Ou use e-mail de demonstração</span>
+                </div>
+              </div>
+
+              {/* Demo Login (Carol Santos) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentUser(INITIAL_USERS[0]);
+                  setShowLoginModal(false);
+                }}
+                className="w-full bg-slate-900 border border-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 px-4 rounded-xl text-xs transition shadow-sm cursor-pointer flex items-center justify-center gap-1.5 duration-150 active:scale-95 animate-duration-150"
+              >
+                <span>Entrar como Carol Santos (Demo)</span>
+              </button>
+
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-150 text-[10.5px] text-slate-500 leading-normal flex items-start gap-1.5">
+                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong>Configuração Supabase:</strong> Este fluxo usa <code>@supabase/supabase-js</code>. 
+                  Lembre-se de fornecer <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> nas variáveis de ambiente da Vercel ou local.
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       )}

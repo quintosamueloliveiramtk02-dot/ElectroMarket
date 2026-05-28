@@ -3,6 +3,8 @@ import { api } from '../lib/api';
 import { Product } from '../types';
 import Navbar from '../components/Navbar';
 import { Smartphone, Battery, MapPin, Search, Package, AlertCircle } from 'lucide-react';
+import ProductCard from '../components/ProductCard';
+import ProductSkeletonGrid from '../components/ProductSkeletonGrid';
 
 export default function HomePage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -147,23 +149,6 @@ export default function HomePage() {
           </span>
         </div>
 
-        {/* Loading skeletons */}
-        {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((n) => (
-              <div key={n} className="bg-white border border-slate-100 rounded-2xl overflow-hidden p-4 space-y-4 animate-pulse">
-                <div className="aspect-square bg-slate-200 rounded-xl w-full"></div>
-                <div className="h-4 bg-slate-200 rounded w-2/3"></div>
-                <div className="h-6 bg-slate-200 rounded w-1/3"></div>
-                <div className="flex justify-between items-center pt-2">
-                  <div className="h-3 bg-slate-200 rounded w-1/4"></div>
-                  <div className="h-3 bg-slate-200 rounded w-1/3"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* Error Feedback */}
         {error && !loading && (
           <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center shadow-sm max-w-md mx-auto my-12">
@@ -179,88 +164,37 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Empty list template */}
-        {!loading && !error && filteredProducts.length === 0 && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-sm max-w-lg mx-auto my-8">
-            <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-slate-800">Vitrine Vazia</h3>
-            <p className="text-slate-500 text-xs mt-1 leading-relaxed max-w-sm mx-auto">
-              Nenhum celular ou acessório coincide com o filtro "{selectedCategory}" ou termo de busca "{searchQuery}". Tente pesquisar outro termo ou limpe os filtros.
-            </p>
-            <button
-              onClick={() => {
-                setSelectedCategory('Todos');
-                setSearchQuery('');
-              }}
-              className="mt-4 bg-slate-900 text-white px-4 py-2.5 rounded-xl text-xs font-semibold hover:bg-slate-800 transition active:scale-95"
-            >
-              Reiniciar Vitrine
-            </button>
-          </div>
-        )}
-
-        {/* Real Dynamic Grid layout list */}
-        {!loading && !error && filteredProducts.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredProducts.map((product) => (
-              <div
-                key={product.id}
-                onClick={() => handleProductClick(product.id)}
-                className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm group hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col h-full transform hover:-translate-y-1"
+        {/* Dynamic Catalog State Flow (Loading, Empty, or Real Products) */}
+        {!error && (
+          loading ? (
+            // Exibe seus Skeletons reais enquanto o banco de dados responde
+            <ProductSkeletonGrid />
+          ) : filteredProducts.length === 0 ? (
+            // Se o banco responder e estiver vazio, exibe o Empty State real
+            <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-sm max-w-lg mx-auto my-8">
+              <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-slate-800 font-sans">Nenhum aparelho disponível no momento</h3>
+              <p className="text-slate-505 text-xs mt-1 leading-relaxed max-w-sm mx-auto">
+                Experimente pesquisar outro termo ou redefinir seus filtros de categoria.
+              </p>
+              <button
+                onClick={() => {
+                  setSelectedCategory('Todos');
+                  setSearchQuery('');
+                }}
+                className="mt-4 bg-slate-900 text-white px-4 py-2.5 rounded-xl text-xs font-semibold hover:bg-slate-850 transition active:scale-95 cursor-pointer"
               >
-                {/* Image Aspect ratio container with cover and badge */}
-                <div className="relative aspect-square overflow-hidden bg-slate-50 border-b border-slate-100 flex items-center justify-center">
-                  <img
-                    src={product.images && product.images[0] ? product.images[0] : 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=400&q=80'}
-                    alt={product.title}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300"
-                  />
-                  
-                  {/* Battery batteryHealth visual label */}
-                  {product.batteryHealth && (
-                    <div className="absolute bottom-2 left-2 bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-bold px-2Instance py-1 rounded-lg flex items-center gap-1">
-                      <Battery className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>{product.batteryHealth}%</span>
-                    </div>
-                  )}
-
-                  {/* Brand Pill badge tag */}
-                  <span className="absolute top-2 right-2 bg-white/90 backdrop-blur-md text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-200 uppercase">
-                    {product.brand}
-                  </span>
-                </div>
-
-                {/* Info and content panel */}
-                <div className="p-4 flex flex-col flex-1 justify-between gap-3">
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition truncate" title={product.title}>
-                      {product.title}
-                    </h3>
-                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed min-h-[3rem]">
-                      {product.description || 'Nenhuma descrição detalhada disponível.'}
-                    </p>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-base font-extrabold text-[#004ac6]">
-                        {formatPrice(product.price)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-2.5 text-[11px] text-slate-400 font-medium">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span className="truncate max-w-[120px]">{product.location}</span>
-                      </div>
-                      <span>{product.storage || '128GB'}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                Limpar Filtros
+              </button>
+            </div>
+          ) : (
+            // Renderiza os produtos reais vindos da API
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {filteredProducts.map(product => (
+                <ProductCard key={product.id} product={product} onClick={() => handleProductClick(product.id)} />
+              ))}
+            </div>
+          )
         )}
 
       </main>

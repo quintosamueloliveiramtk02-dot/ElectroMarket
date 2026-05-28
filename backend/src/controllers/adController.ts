@@ -24,6 +24,14 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
       return;
     }
 
+    // Determine final image URLs (supporting either Cloudinary multipart uploads or raw JSON URL inputs)
+    let imageUrls: string[] = [];
+    if (req.files && Array.isArray(req.files)) {
+      imageUrls = (req.files as any[]).map(file => file.path || file.secure_url || file.url);
+    } else {
+      imageUrls = Array.isArray(images) ? images : [];
+    }
+
     const ad = await prisma.product.create({
       data: {
         userId,
@@ -34,7 +42,7 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
         model,
         batteryHealth: batteryHealth ? parseInt(batteryHealth, 10) : null,
         storage: storage || null,
-        images: Array.isArray(images) ? images : [],
+        images: imageUrls,
         location,
         isFeatured: !!isFeatured,
       }
