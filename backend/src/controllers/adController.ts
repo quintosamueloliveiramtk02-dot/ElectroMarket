@@ -1,6 +1,13 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import prisma from '../lib/prisma';
+import { v2 as cloudinary } from 'cloudinary';
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'electromarket-demo',
+  api_key: process.env.CLOUDINARY_API_KEY || '',
+  api_secret: process.env.CLOUDINARY_API_SECRET || ''
+});
 
 // 1. Criar um anúncio associado ao ID do usuário autenticado
 export const createAd = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -49,10 +56,19 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
       validatedImages = [images];
     }
 
-    if (req.files && Array.isArray(req.files)) {
-      const fileUrls = (req.files as any[]).map(file => file.path || file.secure_url || file.url || file.filename).filter(Boolean);
-      if (fileUrls.length > 0) {
-        validatedImages = [...validatedImages, ...fileUrls];
+    // Se o frontend enviou arquivos físicos pelo FormData
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      for (const file of req.files as any[]) {
+        if (file.buffer) {
+          const b64 = Buffer.from(file.buffer).toString("base64");
+          const dataURI = "data:" + (file.mimetype || "image/jpeg") + ";base64," + b64;
+          const cldRes = await cloudinary.uploader.upload(dataURI, {
+            folder: "electromarket-products",
+          });
+          validatedImages.push(cldRes.secure_url);
+        } else if (file.path || file.secure_url || file.url) {
+          validatedImages.push(file.path || file.secure_url || file.url);
+        }
       }
     }
 
