@@ -177,6 +177,7 @@ export const syncUser = async (req: Request, res: Response): Promise<void> => {
           name: fallbackName,
           avatarUrl: avatarUrl || null,
           phone: phone || null,
+          passwordHash: 'oauth-social-login-placeholder-' + Math.random().toString(36).slice(2),
         }
       });
     }
