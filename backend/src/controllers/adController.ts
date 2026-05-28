@@ -40,12 +40,20 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
       return;
     }
 
-    // Determine final image URLs (supporting either Cloudinary multipart uploads or raw JSON URL inputs)
-    let imageUrls: string[] = [];
+    // Garante que images seja um array válido de strings e remove qualquer valor nulo/undefined
+    let validatedImages: string[] = [];
+
+    if (Array.isArray(images)) {
+      validatedImages = images.filter(img => img !== undefined && img !== null && img !== 'undefined');
+    } else if (typeof images === 'string' && images) {
+      validatedImages = [images];
+    }
+
     if (req.files && Array.isArray(req.files)) {
-      imageUrls = (req.files as any[]).map(file => file.path || file.secure_url || file.url);
-    } else {
-      imageUrls = Array.isArray(images) ? images : [];
+      const fileUrls = (req.files as any[]).map(file => file.path || file.secure_url || file.url || file.filename).filter(Boolean);
+      if (fileUrls.length > 0) {
+        validatedImages = [...validatedImages, ...fileUrls];
+      }
     }
 
     const ad = await prisma.product.create({
@@ -58,7 +66,7 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
         model,
         batteryHealth: parsedBattery,
         storage: storage || null,
-        images: imageUrls,
+        images: validatedImages,
         location,
         isFeatured: !!isFeatured,
       }
