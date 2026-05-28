@@ -43,17 +43,35 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     }
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Erro de rede HTTP (Código ${response.status})`);
+    if (!response.ok) {
+      let errorMsg = `Erro de rede HTTP (Código ${response.status})`;
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.error) {
+          errorMsg = errorData.error;
+        }
+      } catch (e) {
+        // Se falhar ao parsear JSON
+      }
+      console.error(`[API Request Error] Falha na requisição para ${url}:`, {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorMsg,
+      });
+      throw new Error(errorMsg);
+    }
+
+    return response.json() as Promise<T>;
+  } catch (err: any) {
+    console.error(`[API Network Error] Falha de rede/conexão para ${url}:`, err);
+    throw err;
   }
-
-  return response.json() as Promise<T>;
 }
 
 export const api = {

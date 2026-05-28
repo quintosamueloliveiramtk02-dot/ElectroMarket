@@ -1856,8 +1856,8 @@ export default function App() {
         realProduct = response.ad;
       }
     } catch (apiErr: any) {
-      console.error("Erro ao publicar na API real. Salvando localmente como fallback...", apiErr);
-      alert("Aviso: Conexão direta com a API falhou. O anúncio foi salvo localmente temporariamente.");
+      console.error("Erro ao publicar na API real. Detalhes completos do erro:", apiErr);
+      alert(`Aviso: Conexão direta com a API falhou (Erro: ${apiErr?.message || apiErr}). O anúncio foi salvo localmente temporariamente.`);
     }
 
     const localImageUrls = selectedImageFiles.length > 0
