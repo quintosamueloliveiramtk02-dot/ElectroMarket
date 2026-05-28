@@ -17,7 +17,9 @@ import {
   ChevronLeft,
   UserCheck,
   Cpu,
-  Phone
+  Phone,
+  Eye,
+  Info
 } from 'lucide-react';
 
 interface ProductWithSeller extends Product {
@@ -29,7 +31,7 @@ interface ProductWithSeller extends Product {
   };
 }
 
-export default function AdDetailPage() {
+export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
@@ -107,6 +109,7 @@ export default function AdDetailPage() {
 
   const formatPhoneNumber = (phoneStr?: string) => {
     if (!phoneStr) return '(11) 99999-9999';
+    // Remove non-numeric characters
     const cleaned = phoneStr.replace(/\D/g, '');
     if (cleaned.length === 11) {
       return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 7)}-${cleaned.substring(7)}`;
