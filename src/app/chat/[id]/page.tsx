@@ -176,6 +176,18 @@ export default function ChatDetailPage() {
         setMessages((prev) => {
           // Idempotency: skip inserting if message is already stored in state
           if (prev.some((msg) => msg.id === newMessage.id)) return prev;
+
+          // Se encontrar mensagem temporária enviada por nós com o mesmo texto, substitui pelo ID real do banco
+          const tempIndex = prev.findIndex(
+            (msg) => msg.id.startsWith('tempid-') && msg.senderId === newMessage.senderId && msg.text === newMessage.text
+          );
+
+          if (tempIndex !== -1) {
+            const updated = [...prev];
+            updated[tempIndex] = newMessage;
+            return updated;
+          }
+
           return [...prev, newMessage];
         });
         scrollToBottom();

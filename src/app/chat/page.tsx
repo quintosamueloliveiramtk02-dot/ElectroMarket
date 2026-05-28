@@ -184,6 +184,18 @@ export default function ChatPage() {
         setMessages((prev) => {
           // Garante idempotência: previne injeção da mesma mensagem caso chegue repetida
           if (prev.some((msg) => msg.id === newMessage.id)) return prev;
+
+          // Se encontrar mensagem temporária enviada por nós com o mesmo texto, substitui pelo ID real do banco
+          const tempIndex = prev.findIndex(
+            (msg) => msg.id.startsWith('tempid-') && msg.senderId === newMessage.senderId && msg.text === newMessage.text
+          );
+
+          if (tempIndex !== -1) {
+            const updated = [...prev];
+            updated[tempIndex] = newMessage;
+            return updated;
+          }
+
           return [...prev, newMessage];
         });
         scrollToBottom();
@@ -228,15 +240,42 @@ export default function ChatPage() {
     if (!cleanText || !activeChatId || !user || !socketRef.current) return;
 
     try {
-      // Dispara via Socket.io evento de envio
+      // 1. Envia em tempo real via Socket para o outro usuário
       socketRef.current.emit('send_message', {
         chatId: activeChatId,
         senderId: user.id,
         text: cleanText,
       });
 
+      // 2. Atualiza a tela local imediatamente com o dado real
+      const temporaryId = `tempid-${Date.now()}`;
+      const mockMessageObj: MessageWithSender = {
+        id: temporaryId,
+        chatId: activeChatId,
+        senderId: user.id,
+        text: cleanText,
+        createdAt: new Date().toISOString(),
+        sender: {
+          id: user.id,
+          name: user.name,
+          avatarUrl: user.avatarUrl || ''
+        }
+      };
+
+      setMessages((prev) => [...prev, mockMessageObj]);
+
+      // Atualizar barra lateral instantaneamente com a mensagem recente
+      setChats((prevChats) =>
+        prevChats.map((c) =>
+          c.id === activeChatId
+            ? { ...c, messages: [{ id: temporaryId, text: cleanText, createdAt: new Date().toISOString() }] }
+            : c
+        )
+      );
+
       // Limpar o campo de input
       setInputText('');
+      scrollToBottom();
     } catch (err) {
       console.error('Erro ao enviar mensagem:', err);
     }
