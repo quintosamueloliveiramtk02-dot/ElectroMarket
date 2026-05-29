@@ -1760,7 +1760,7 @@ export default function App() {
   const handleDeleteAd = async (adId: string, event: React.MouseEvent) => {
     event.stopPropagation(); // Evita que clique no botão abra os detalhes do produto
 
-    const userConfirmed = window.confirm('Tem certeza que deseja apagar?');
+    const userConfirmed = window.confirm('Tem certeza que deseja deletar este anúncio?');
     if (!userConfirmed) return;
 
     try {

@@ -191,7 +191,12 @@ export default function HomePage() {
             // Renderiza os produtos reais vindos da API
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {filteredProducts.map(product => (
-                <ProductCard key={product.id} product={product} onClick={() => handleProductClick(product.id)} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onClick={() => handleProductClick(product.id)}
+                  onDelete={(id) => setProducts(prev => prev.filter(p => p.id !== id))}
+                />
               ))}
             </div>
           )

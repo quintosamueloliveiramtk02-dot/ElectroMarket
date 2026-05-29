@@ -1,14 +1,24 @@
 import React from 'react';
 import { Product } from '../types';
-import { Battery, MapPin, Sparkles } from 'lucide-react';
+import { Battery, MapPin, Sparkles, Trash2 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ProductCardProps {
   product: Product;
   onClick?: () => void;
+  onDelete?: (id: string) => void;
   key?: string | number;
 }
 
-export default function ProductCard({ product, onClick }: ProductCardProps) {
+export default function ProductCard({ product, onClick, onDelete }: ProductCardProps) {
+  let authContext: any = null;
+  try {
+    authContext = useAuth();
+  } catch (e) {
+    // Prevent crash if rendered outside provider
+  }
+  const user = authContext?.user;
+
   // Safe default formatting for Brazilian Real Currency
   const formatPrice = (price: number) => {
     return price.toLocaleString('pt-BR', {
@@ -26,6 +36,34 @@ export default function ProductCard({ product, onClick }: ProductCardProps) {
         const event = new CustomEvent('navigate_ad_details', { detail: { id: product.id } });
         window.dispatchEvent(event);
       }
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Avoid triggering open card click details
+    if (!confirm('Tem certeza que deseja deletar este anúncio?')) return;
+
+    try {
+      const activeToken = localStorage.getItem('electromarket_token') || authContext?.token || '';
+      const response = await fetch(`https://electromarket-s30g.onrender.com/api/ads/${product.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${activeToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.status === 200 || response.ok) {
+        if (onDelete) {
+          onDelete(product.id);
+        }
+        alert('Anúncio excluído com sucesso!');
+      } else {
+        throw new Error(`Erro status ${response.status}`);
+      }
+    } catch (err: any) {
+      console.error('Erro ao deletar anúncio:', err);
+      alert('Não foi possível deletar o anúncio. Tente novamente mais tarde.');
     }
   };
 
@@ -63,6 +101,18 @@ export default function ProductCard({ product, onClick }: ProductCardProps) {
             <Sparkles className="w-3 h-3 text-amber-400 fill-amber-400" />
             <span>Destaque</span>
           </span>
+        )}
+
+        {/* Delete button (excluir) for actual ad owner */}
+        {user && user.id === product.userId && (
+          <button
+            id={`btn-delete-${product.id}`}
+            title="Excluir Anúncio"
+            onClick={handleDelete}
+            className="absolute bottom-2 right-2 bg-red-650 hover:bg-red-700 text-white p-1.5 rounded-lg border border-red-500 shadow-md transition-all duration-150 z-30 hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
         )}
       </div>
 
