@@ -32,10 +32,10 @@ export default function ProductCard({ product, onClick, onDelete, onEdit }: Prod
     if (onClick) {
       onClick();
     } else {
-      console.log(`[ProductCard] Click sem callback customizado. Emitindo evento '/ads/${product.id}'`);
+      console.log(`[ProductCard] Redirecionando para /anuncio/${product.id}`);
       if (typeof window !== 'undefined') {
-        const event = new CustomEvent('navigate_ad_details', { detail: { id: product.id } });
-        window.dispatchEvent(event);
+        window.history.pushState({}, '', `/anuncio/${product.id}`);
+        window.dispatchEvent(new PopStateEvent('popstate'));
       }
     }
   };

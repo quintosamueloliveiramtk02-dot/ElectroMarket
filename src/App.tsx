@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { User, Product, Chat, Message } from './types';
 import { supabase } from './lib/supabaseClient';
+import ProductDetails from './components/ProductDetails';
 
 // Let's create the hardcoded database code representations to display & copy easily.
 const SCHEMA_PRISMA_CODE = `datasource db {
@@ -1742,6 +1743,28 @@ export default function App() {
   // Chat modal state
   const [showChatModal, setShowChatModal] = useState<boolean>(false);
 
+  // Simple state-based router for single-page dynamic layouts
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const navigate = (path: string) => {
+    window.history.pushState({}, "", path);
+    setCurrentPath(path);
+  };
+
+  const matchAnuncio = currentPath.match(/^\/anuncio\/([a-zA-Z0-9-]+)$/);
+  const adIdFromUrl = matchAnuncio ? matchAnuncio[1] : null;
+  const adProduct = adIdFromUrl 
+    ? (products.find(p => p.id === adIdFromUrl) || INITIAL_PRODUCTS.find(p => p.id === adIdFromUrl)) 
+    : null;
+
   // Active details / modal states
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showAnnounceModal, setShowAnnounceModal] = useState<boolean>(false);
@@ -2318,8 +2341,31 @@ export default function App() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex-grow w-full py-6">
-        
-        {/* Responsive Search for mobile view */}
+        {currentPath.startsWith("/anuncio/") ? (
+          adProduct ? (
+            <ProductDetails 
+              product={adProduct} 
+              onNegotiate={() => startChatForProduct(adProduct)} 
+              onBack={() => navigate("/")} 
+            />
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm my-8">
+              <Package className="w-12 h-12 text-slate-300 mx-auto mb-3 animate-pulse" />
+              <h3 className="text-lg font-bold text-slate-800">Buscando detalhes do anúncio...</h3>
+              <p className="text-slate-500 max-w-md mx-auto text-sm mt-1">
+                Aguarde um instante enquanto localizamos este smartphone no nosso banco de dados.
+              </p>
+              <button 
+                onClick={() => navigate("/")}
+                className="mt-6 bg-[#2563eb] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+              >
+                Voltar para o Catálogo
+              </button>
+            </div>
+          )
+        ) : (
+          <>
+            {/* Responsive Search for mobile view */}
         <div className="mb-6 md:hidden relative">
           <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
@@ -2430,7 +2476,7 @@ export default function App() {
                 <div 
                   key={product.id}
                   className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm group hover:shadow-lg transition-all transform hover:-translate-y-1 relative duration-200 cursor-pointer"
-                  onClick={() => setSelectedProduct(product)}
+                  onClick={() => navigate(`/anuncio/${product.id}`)}
                 >
                   {/* Image & tag wrapper */}
                   <div className="relative aspect-square overflow-hidden bg-slate-100">
@@ -2565,6 +2611,8 @@ export default function App() {
             )}
           </form>
         </section>
+          </>
+        )}
 
       </main>
 
