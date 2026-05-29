@@ -27,6 +27,7 @@ export interface Product {
 
 export interface Chat {
   id: string;
+  chatRoomId?: string;
   buyerId: string;
   sellerId: string;
   productId: string;
@@ -36,6 +37,7 @@ export interface Chat {
 export interface Message {
   id: string;
   chatId: string;
+  chatRoomId?: string;
   senderId: string;
   text: string;
   createdAt: string;

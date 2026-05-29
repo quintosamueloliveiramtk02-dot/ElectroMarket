@@ -1791,11 +1791,13 @@ export default function App() {
 
     socket.on('receive_message', (newMsg: any) => {
       console.log('[Socket.io] Nova mensagem real-time recebida do Postgres:', newMsg);
+      const chatRoomId = newMsg.chatRoomId || newMsg.chatId;
       setMessages(prev => {
         if (prev.find(m => m.id === newMsg.id)) return prev;
         return [...prev, {
           id: newMsg.id,
-          chatId: newMsg.chatId || newMsg.chatRoomId,
+          chatId: chatRoomId,
+          chatRoomId: chatRoomId,
           senderId: newMsg.senderId,
           text: newMsg.text,
           createdAt: newMsg.createdAt
@@ -1825,7 +1827,11 @@ export default function App() {
         // Consome a rota real unificada do banco: GET /api/chats/rooms/:userId
         const fetchedChats = await api.get<Chat[]>(`/chats/rooms/${activeUserId}`);
         if (Array.isArray(fetchedChats)) {
-          setChats(fetchedChats);
+          const mappedChats = fetchedChats.map(c => ({
+            ...c,
+            chatRoomId: c.chatRoomId || c.id
+          }));
+          setChats(mappedChats);
         }
       } catch (err) {
         console.warn('Erro ao buscar canais de chat do backend real:', err);
@@ -1845,11 +1851,16 @@ export default function App() {
     const fetchMessages = async () => {
       try {
         // Consome a rota real unificada do banco: GET /api/chats/rooms/:roomId/messages
-        const fetchedMsgs = await api.get<Message[]>(`/chats/rooms/${activeChatId}/messages`);
+        const fetchedMsgs = await api.get<any[]>(`/chats/rooms/${activeChatId}/messages`);
         if (Array.isArray(fetchedMsgs)) {
+          const mappedMsgs = fetchedMsgs.map(m => ({
+            ...m,
+            chatId: m.chatRoomId || m.chatId,
+            chatRoomId: m.chatRoomId || m.chatId
+          }));
           setMessages(prev => {
             const others = prev.filter(m => (m.chatId || (m as any).chatRoomId) !== activeChatId);
-            return [...others, ...fetchedMsgs];
+            return [...others, ...mappedMsgs];
           });
         }
       } catch (err) {
@@ -1918,48 +1929,76 @@ export default function App() {
     }
   }, [currentPath, products, currentUser]);
 
-  const handleSendDynamicMessage = async (chatIdToUse: string, text: string) => {
+  const handleSendDynamicMessage = async (chatRoomIdToUse: string, text: string) => {
     const senderId = currentUser ? currentUser.id : "user-buyer-1";
     
+    // Cria um objeto de mensagem otimista e atualiza a tela IMEDIATAMENTE para máxima agilidade
+    const tempId = `msg-temp-${Date.now()}`;
+    const optimisticMsg: Message = {
+      id: tempId,
+      chatId: chatRoomIdToUse,
+      chatRoomId: chatRoomIdToUse,
+      senderId: senderId,
+      text: text,
+      createdAt: new Date().toISOString()
+    };
+
+    setMessages(prev => [...prev, optimisticMsg]);
+
     try {
       // Salva no banco de dados através da rota real: POST /api/chats/messages
       const savedMsg = await api.post<any>('/chats/messages', {
-        chatRoomId: chatIdToUse,
+        chatRoomId: chatRoomIdToUse,
         senderId: senderId,
         text: text
       });
 
       console.log('[API] Mensagem enviada e salva com sucesso no PostgreSQL via HTTP POST:', savedMsg);
 
-      // Em seguida, retransmite o objeto completo (contendo o ID real persistente) pelo Socket.io
+      const mappedMsg: Message = {
+        id: savedMsg.id,
+        chatId: savedMsg.chatRoomId || savedMsg.chatId || chatRoomIdToUse,
+        chatRoomId: savedMsg.chatRoomId || savedMsg.chatId || chatRoomIdToUse,
+        senderId: savedMsg.senderId,
+        text: savedMsg.text,
+        createdAt: savedMsg.createdAt || new Date().toISOString()
+      };
+
+      // Substitui a mensagem otimista temporária na tela pelo registro definitivo persistido no banco
+      setMessages(prev => {
+        const filtered = prev.filter(m => m.id !== tempId);
+        if (filtered.find(m => m.id === mappedMsg.id)) return filtered;
+        return [...filtered, mappedMsg];
+      });
+
+      // Em seguida, transmite a mensagem via Socket.io em segundo plano
       if (socketRef.current && socketRef.current.connected) {
-        socketRef.current.emit('send_message', savedMsg);
-      } else {
-        // Fallback local visual caso o Socket esteja instável
-        setMessages(prev => {
-          if (prev.find(m => m.id === savedMsg.id)) return prev;
-          return [...prev, savedMsg];
-        });
+        socketRef.current.emit('send_message', mappedMsg);
       }
     } catch (err) {
-      console.warn('[API] Erro ao salvar mensagem via HTTP POST, transmitindo via evento primário do Socket.io:', err);
-      // Se a rota falhar, tentamos enviar direto pelo Socket.io de forma direta
+      console.warn('[API] Erro ao salvar mensagem via HTTP POST, revertendo temporária e disparando via Socket.io:', err);
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+
+      const socketPayload = {
+        chatId: chatRoomIdToUse,
+        chatRoomId: chatRoomIdToUse,
+        senderId: senderId,
+        text: text,
+        createdAt: new Date().toISOString()
+      };
+
       if (socketRef.current && socketRef.current.connected) {
-        socketRef.current.emit('send_message', {
-          chatId: chatIdToUse,
-          senderId: senderId,
-          text: text
-        });
+        socketRef.current.emit('send_message', socketPayload);
       } else {
-        // Fallback local total visual
-        const newMsg: Message = {
+        const offlineMsg: Message = {
           id: `msg-${Date.now()}`,
-          chatId: chatIdToUse,
+          chatId: chatRoomIdToUse,
+          chatRoomId: chatRoomIdToUse,
           senderId: senderId,
           text: text,
           createdAt: new Date().toISOString()
         };
-        setMessages(prev => [...prev, newMsg]);
+        setMessages(prev => [...prev, offlineMsg]);
       }
     }
   };

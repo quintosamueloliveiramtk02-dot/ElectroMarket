@@ -103,7 +103,12 @@ export const getOrCreateChat = async (req: AuthRequest, res: Response): Promise<
       });
     }
 
-    res.status(200).json(chat);
+    const responseData = {
+      ...chat,
+      chatRoomId: chat.id
+    };
+
+    res.status(200).json(responseData);
   } catch (error: any) {
     res.status(500).json({
       error: 'Erro ao obter ou criar sala de chat',
@@ -170,8 +175,10 @@ export const getUserChats = async (req: AuthRequest, res: Response): Promise<voi
 
     const mappedChats = chats.map(c => ({
       ...c,
+      chatRoomId: c.id,
       messages: c.messages.map(m => ({
         ...m,
+        chatRoomId: m.chatRoomId,
         chatId: m.chatRoomId
       }))
     }));
@@ -229,6 +236,7 @@ export const getChatMessages = async (req: AuthRequest, res: Response): Promise<
 
     const mappedMessages = chat.messages.map(m => ({
       ...m,
+      chatRoomId: m.chatRoomId,
       chatId: m.chatRoomId
     }));
 

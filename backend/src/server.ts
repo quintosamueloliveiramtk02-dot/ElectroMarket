@@ -89,14 +89,15 @@ io.on('connection', (socket) => {
   console.log(`[Socket.io] Novo cliente conectado: ${socket.id}`);
 
   // Evento para entrar em um canal de conversa privado
-  socket.on('join_room', (chatId: string) => {
-    socket.join(chatId);
-    console.log(`[Socket.io] Cliente ${socket.id} entrou no chat (sala): ${chatId}`);
+  socket.on('join_room', (chatRoomId: string) => {
+    socket.join(chatRoomId);
+    console.log(`[Socket.io] Cliente ${socket.id} entrou no chat (sala): ${chatRoomId}`);
   });
 
   // Evento para envio de mensagens em tempo real
-  socket.on('send_message', async (data: { chatId: string; senderId: string; text: string; id?: string; createdAt?: string; sender?: any }) => {
-    const { chatId, senderId, text, id } = data;
+  socket.on('send_message', async (data: { chatRoomId?: string; chatId?: string; senderId: string; text: string; id?: string; createdAt?: string; sender?: any }) => {
+    const chatRoomId = data.chatRoomId || data.chatId || "";
+    const { senderId, text, id } = data;
 
     try {
       let messageWithChatId: any;
@@ -106,13 +107,14 @@ io.on('connection', (socket) => {
         // Apenas retransmitimos para atualizar a tela dos outros usuários em tempo real de forma otimizada.
         messageWithChatId = {
           ...data,
-          chatId: chatId || data.chatId
+          chatRoomId: chatRoomId,
+          chatId: chatRoomId
         };
       } else {
         // Salva no banco de dados através do Prisma caso ainda não tenha sido criada via HTTP POST
         const message = await prisma.message.create({
           data: {
-            chatRoomId: chatId,
+            chatRoomId: chatRoomId,
             senderId,
             text,
           },
@@ -129,13 +131,14 @@ io.on('connection', (socket) => {
 
         messageWithChatId = {
           ...message,
+          chatRoomId: message.chatRoomId,
           chatId: message.chatRoomId
         };
       }
 
       // Retransmite imediatamente para todos os os participantes na mesma sala do Chat
-      io.to(chatId).emit('receive_message', messageWithChatId);
-      console.log(`[Socket.io] Mensagem retransmitida de ${senderId} na sala ${chatId}: ${text}`);
+      io.to(chatRoomId).emit('receive_message', messageWithChatId);
+      console.log(`[Socket.io] Mensagem retransmitida de ${senderId} na sala ${chatRoomId}: ${text}`);
     } catch (error: any) {
       console.error('[Socket.io] Erro ao processar mensagem enviada:', error.message);
     }

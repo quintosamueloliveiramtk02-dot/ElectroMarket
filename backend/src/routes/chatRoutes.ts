@@ -99,7 +99,12 @@ router.post('/rooms', async (req: Request, res: Response): Promise<any> => {
       });
     }
 
-    return res.status(200).json(chat);
+    const responseData = {
+      ...chat,
+      chatRoomId: chat.id
+    };
+
+    return res.status(200).json(responseData);
   } catch (error: any) {
     return res.status(500).json({
       error: 'Erro ao obter ou criar sala de chat',
@@ -161,8 +166,10 @@ router.get('/rooms/:userId', async (req: Request, res: Response): Promise<any> =
 
     const mappedChats = chats.map(c => ({
       ...c,
+      chatRoomId: c.id,
       messages: c.messages.map(m => ({
         ...m,
+        chatRoomId: m.chatRoomId,
         chatId: m.chatRoomId
       }))
     }));
@@ -327,12 +334,19 @@ router.post('/gateway', async (req: Request, res: Response): Promise<any> => {
         });
       }
 
-      return res.status(200).json(chat);
+      const responseData = {
+        ...chat,
+        chatRoomId: chat.id
+      };
+
+      return res.status(200).json(responseData);
     } catch (dbError) {
       console.warn('[Chat Gateway] Erro no banco de dados, utilizando fallback em memória:', dbError);
       // Fallback em memória para fins ilustrativos se o banco estiver temporariamente indisponível
+      const fallbackId = `chat_${Date.now()}`;
       return res.status(200).json({
-        id: `chat_${Date.now()}`,
+        id: fallbackId,
+        chatRoomId: fallbackId,
         productId,
         buyerId,
         sellerId,

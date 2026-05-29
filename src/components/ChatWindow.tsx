@@ -20,7 +20,7 @@ interface ChatWindowProps {
   messages: Message[];
   products: Product[];
   users: User[];
-  onSendMessage: (chatId: string, text: string) => void;
+  onSendMessage: (chatRoomId: string, text: string) => void;
   selectedChatIdFromRoute: string | null;
 }
 
@@ -33,7 +33,7 @@ export default function ChatWindow({
   onSendMessage,
   selectedChatIdFromRoute
 }: ChatWindowProps) {
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [activeChatRoomId, setActiveChatRoomId] = useState<string | null>(null);
   const [typedMessage, setTypedMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showMobileList, setShowMobileList] = useState(true);
@@ -42,24 +42,25 @@ export default function ChatWindow({
   // Default fallback avatar
   const defaultAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120px&h=120px&q=80";
 
-  // Auto-scroll to the end of messages when activeChatId or messages list changes
+  // Auto-scroll to the end of messages when activeChatRoomId or messages list changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeChatId, messages]);
+  }, [activeChatRoomId, messages]);
 
   // Sync active chat when a specific route chatId or productId comes in
   useEffect(() => {
     if (selectedChatIdFromRoute) {
-      setActiveChatId(selectedChatIdFromRoute);
+      setActiveChatRoomId(selectedChatIdFromRoute);
       setShowMobileList(false); // On mobile, go straight to the chat area if chat is selected
-    } else if (chats.length > 0 && !activeChatId) {
+    } else if (chats.length > 0 && !activeChatRoomId) {
       // By default open the first chat on desktop
-      setActiveChatId(chats[0].id);
+      const initialChatRoomId = chats[0].chatRoomId || chats[0].id;
+      setActiveChatRoomId(initialChatRoomId);
     }
-  }, [selectedChatIdFromRoute, chats, activeChatId]);
+  }, [selectedChatIdFromRoute, chats, activeChatRoomId]);
 
   // Get active chat object
-  const activeChat = chats.find(c => c.id === activeChatId);
+  const activeChat = chats.find(c => (c.chatRoomId || c.id) === activeChatRoomId);
 
   // Helper to find the other user in the chat (Buyer vs Seller)
   const getChatPartner = (chat: Chat): User => {
@@ -96,17 +97,17 @@ export default function ChatWindow({
   };
 
   // Helper to obtain the last message in a chat
-  const getLastMessage = (chatId: string): Message | null => {
-    const chatMsgs = messages.filter(m => m.chatId === chatId);
+  const getLastMessage = (chatRoomId: string): Message | null => {
+    const chatMsgs = messages.filter(m => (m.chatRoomId || m.chatId) === chatRoomId);
     if (chatMsgs.length === 0) return null;
     return chatMsgs[chatMsgs.length - 1];
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!typedMessage.trim() || !activeChatId) return;
+    if (!typedMessage.trim() || !activeChatRoomId) return;
 
-    onSendMessage(activeChatId, typedMessage.trim());
+    onSendMessage(activeChatRoomId, typedMessage.trim());
     setTypedMessage("");
   };
 
@@ -114,7 +115,8 @@ export default function ChatWindow({
   const filteredChats = chats.filter(chat => {
     const partner = getChatPartner(chat);
     const prod = getChatProduct(chat);
-    const lastMsg = getLastMessage(chat.id)?.text || "";
+    const chatRoomId = chat.chatRoomId || chat.id;
+    const lastMsg = getLastMessage(chatRoomId)?.text || "";
 
     const cleanQuery = searchQuery.toLowerCase();
     return (
@@ -172,22 +174,23 @@ export default function ChatWindow({
             </div>
           ) : (
             filteredChats.map(chat => {
+              const chatRoomId = chat.chatRoomId || chat.id;
               const partner = getChatPartner(chat);
               const prod = getChatProduct(chat);
-              const lastMsg = getLastMessage(chat.id);
-              const isActive = chat.id === activeChatId;
+              const lastMsg = getLastMessage(chatRoomId);
+              const isActive = chatRoomId === activeChatRoomId;
 
               return (
                 <button
-                  key={chat.id}
+                  key={chatRoomId}
                   onClick={() => {
-                    setActiveChatId(chat.id);
+                    setActiveChatRoomId(chatRoomId);
                     setShowMobileList(false); // Switch view to chat on mobile
                   }}
                   className={`w-full text-left p-4 flex items-start gap-3 hover:bg-slate-50 transition-colors cursor-pointer relative ${
                     isActive ? "bg-blue-50/50 hover:bg-blue-50/70 block-active-border" : ""
                   }`}
-                  id={`contact-item-${chat.id}`}
+                  id={`contact-item-${chatRoomId}`}
                 >
                   {/* Left accent line for active contact */}
                   {isActive && (
@@ -251,7 +254,7 @@ export default function ChatWindow({
         <AnimatePresence mode="wait">
           {activeChat ? (
             <motion.div 
-              key={activeChat.id}
+              key={activeChat.chatRoomId || activeChat.id}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -333,7 +336,7 @@ export default function ChatWindow({
 
                 {/* Message display listing */}
                 {messages
-                  .filter(m => m.chatId === activeChat.id)
+                  .filter(m => (m.chatRoomId || m.chatId) === (activeChat.chatRoomId || activeChat.id))
                   .map((msg, index) => {
                     const isMe = msg.senderId === currentUser?.id || msg.senderId === "user-buyer-1";
                     
