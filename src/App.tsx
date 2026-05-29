@@ -36,6 +36,7 @@ import {
 import { User, Product, Chat, Message } from './types';
 import { supabase } from './lib/supabaseClient';
 import ProductDetails from './components/ProductDetails';
+import ChatWindow from './components/ChatWindow';
 
 // Let's create the hardcoded database code representations to display & copy easily.
 const SCHEMA_PRISMA_CODE = `datasource db {
@@ -1759,6 +1760,81 @@ export default function App() {
     setCurrentPath(path);
   };
 
+  // Automatic Chat routing & synchronization effect for /chat?productId=XXX
+  useEffect(() => {
+    if (currentPath.startsWith("/chat")) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const prodId = urlParams.get("productId");
+      if (prodId) {
+        const allProds = products.length > 0 ? products : INITIAL_PRODUCTS;
+        const product = allProds.find(p => p.id === prodId);
+        if (product) {
+          const activeUser = currentUser || INITIAL_USERS[0];
+          // Check if chat already exists
+          const existingChat = chats.find(c => c.productId === product.id && c.buyerId === activeUser.id);
+          if (existingChat) {
+            setActiveChatId(existingChat.id);
+          } else {
+            // Create new chat
+            const newChatId = `chat-${Date.now()}`;
+            const newChatRecord: Chat = {
+              id: newChatId,
+              buyerId: activeUser.id,
+              sellerId: product.userId,
+              productId: product.id,
+              createdAt: new Date().toISOString()
+            };
+
+            const starterMsg: Message = {
+              id: `msg-${Date.now()}`,
+              chatId: newChatId,
+              senderId: activeUser.id,
+              text: `Olá! Tenho interesse no seu "${product.title}" anunciado por R$ ${product.price.toLocaleString('pt-BR')}.`,
+              createdAt: new Date().toISOString()
+            };
+
+            setChats(prev => [...prev, newChatRecord]);
+            setMessages(prev => [...prev, starterMsg]);
+            setActiveChatId(newChatId);
+          }
+        }
+        // Replace search parameters gracefully
+        window.history.replaceState({}, "", "/chat");
+      }
+    }
+  }, [currentPath, products, currentUser]);
+
+  const handleSendDynamicMessage = (chatIdToUse: string, text: string) => {
+    const senderId = currentUser ? currentUser.id : "user-buyer-1";
+    const newMsg: Message = {
+      id: `msg-${Date.now()}`,
+      chatId: chatIdToUse,
+      senderId: senderId,
+      text: text,
+      createdAt: new Date().toISOString()
+    };
+
+    setMessages(prev => [...prev, newMsg]);
+
+    // Simulate auto reply from the other participant
+    const activeChat = chats.find(c => c.id === chatIdToUse);
+    if (activeChat) {
+      const isBuyer = senderId === activeChat.buyerId;
+      const partnerId = isBuyer ? activeChat.sellerId : activeChat.buyerId;
+      const otherUser = users.find(u => u.id === partnerId);
+      setTimeout(() => {
+        const replyMsg: Message = {
+          id: `msg-${Date.now() + 1}`,
+          chatId: chatIdToUse,
+          senderId: partnerId,
+          text: `[Mensagem Automática Simulação] Olá! Recebi sua mensagem: "${text.substring(0, 25)}...". Em breve entrarei em contato pelo telefone ${otherUser?.phone || '(11) 98765-4321'}. Obrigado!`,
+          createdAt: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, replyMsg]);
+      }, 1500);
+    }
+  };
+
   const matchAnuncio = currentPath.match(/^\/anuncio\/([a-zA-Z0-9-]+)$/);
   const adIdFromUrl = matchAnuncio ? matchAnuncio[1] : null;
   const adProduct = adIdFromUrl 
@@ -2188,38 +2264,7 @@ export default function App() {
 
   // Open chat for a specific product
   const startChatForProduct = (product: Product) => {
-    // Check if chat already exists
-    const existingChat = chats.find(c => c.productId === product.id && c.buyerId === "user-buyer-1");
-    if (existingChat) {
-      setActiveChatId(existingChat.id);
-      setSelectedProduct(null);
-      setShowChatModal(true);
-    } else {
-      // Create new chat session conforming to database schemas
-      const newChatId = `chat-${Date.now()}`;
-      const newChatRecord: Chat = {
-        id: newChatId,
-        buyerId: "user-buyer-1",
-        sellerId: product.userId,
-        productId: product.id,
-        createdAt: new Date().toISOString()
-      };
-
-      setChats([...chats, newChatRecord]);
-      setActiveChatId(newChatId);
-      setSelectedProduct(null);
-      setShowChatModal(true);
-
-      // Add starter greeting text
-      const starterMsg: Message = {
-        id: `msg-${Date.now()}`,
-        chatId: newChatId,
-        senderId: "user-buyer-1",
-        text: `Olá! Tenho interesse no seu "${product.title}" anunciado por R$ ${product.price.toLocaleString('pt-BR')}.`,
-        createdAt: new Date().toISOString()
-      };
-      setMessages([...messages, starterMsg]);
-    }
+    navigate(`/chat?productId=${product.id}`);
   };
 
   const filteredProducts = products.filter(p => {
@@ -2252,7 +2297,7 @@ export default function App() {
       <nav id="top-nav" className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
           
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedCategory("Todos")}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setSelectedCategory("Todos"); navigate("/"); }}>
             <div className="bg-[#2563eb] p-1.5 rounded-lg text-white">
               <Flame className="w-6 h-6 fill-white" />
             </div>
@@ -2280,7 +2325,7 @@ export default function App() {
             </button>
 
             <button 
-              onClick={() => { setShowChatModal(true); if (chats.length > 0 && !activeChatId) setActiveChatId(chats[0].id); }}
+              onClick={() => { navigate("/chat"); }}
               className="border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-lg font-semibold text-sm transition flex items-center gap-1.5 cursor-pointer"
             >
               <MessageSquare className="w-4.5 h-4.5 text-[#2563eb]" />
@@ -2294,7 +2339,7 @@ export default function App() {
               <div 
                 className="p-2 hover:bg-slate-100 rounded-full cursor-pointer relative"
                 title="Carrinho de Compras / Chats"
-                onClick={() => { setShowChatModal(true); if (chats.length > 0 && !activeChatId) setActiveChatId(chats[0].id); }}
+                onClick={() => { navigate("/chat"); }}
               >
                 <ShoppingCart className="w-5 h-5 text-slate-600" />
                 <span className="absolute top-1 right-1 bg-[#2563eb] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
@@ -2363,6 +2408,16 @@ export default function App() {
               </button>
             </div>
           )
+        ) : currentPath.startsWith("/chat") ? (
+          <ChatWindow
+            currentUser={currentUser || INITIAL_USERS[0]}
+            chats={chats}
+            messages={messages}
+            products={products.length > 0 ? products : INITIAL_PRODUCTS}
+            users={users}
+            onSendMessage={handleSendDynamicMessage}
+            selectedChatIdFromRoute={activeChatId}
+          />
         ) : (
           <>
             {/* Responsive Search for mobile view */}

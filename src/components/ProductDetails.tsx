@@ -214,7 +214,15 @@ export default function ProductDetails({ product, onNegotiate, onBack }: Product
           {/* Negotiate Action Button */}
           <div className="mt-8 border-t border-slate-100 pt-6" id="negotiate-action-section">
             <button
-              onClick={onNegotiate}
+              onClick={() => {
+                // Disparta callback de negociação navegando para /chat
+                if (onNegotiate) {
+                  onNegotiate();
+                } else {
+                  window.history.pushState({}, "", `/chat?productId=${product.id}`);
+                  window.dispatchEvent(new Event("popstate"));
+                }
+              }}
               className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-blue-600 px-6 py-4 text-base font-bold text-white shadow-md shadow-blue-200 hover:bg-blue-700 active:scale-[0.98] transition-all duration-150 cursor-pointer"
               id="btn-negotiate-chat"
             >
