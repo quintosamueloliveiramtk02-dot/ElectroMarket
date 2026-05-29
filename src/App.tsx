@@ -25,6 +25,7 @@ import {
   Info,
   Check,
   Package,
+  Pencil,
   Sparkles,
   RefreshCw,
   X,
@@ -1757,6 +1758,22 @@ export default function App() {
   });
   const [selectedImageFiles, setSelectedImageFiles] = useState<File[]>([]);
 
+  // Edit Ad form state
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [editingAdId, setEditingAdId] = useState<string | null>(null);
+  const [editAdData, setEditAdData] = useState({
+    title: "",
+    description: "",
+    price: "",
+    brand: "Apple",
+    model: "",
+    batteryHealth: "90",
+    storage: "128GB",
+    location: "São Paulo, SP",
+    isFeatured: false,
+    imagePreset: "https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht"
+  });
+
   const handleDeleteAd = async (adId: string, event: React.MouseEvent) => {
     event.stopPropagation(); // Evita que clique no botão abra os detalhes do produto
 
@@ -1799,6 +1816,156 @@ export default function App() {
       } catch (localErr: any) {
         console.error('Falha ao excluir o anúncio no servidor:', localErr);
         alert(`Ocorreu um erro ao excluir o anúncio: ${localErr.message || localErr}`);
+      }
+    }
+  };
+
+  const handleEditAdClick = (product: Product, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setEditingAdId(product.id);
+    setEditAdData({
+      title: product.title,
+      description: product.description || "",
+      price: product.price.toString(),
+      brand: product.brand || "Apple",
+      model: product.model || "",
+      batteryHealth: product.batteryHealth ? product.batteryHealth.toString() : "",
+      storage: product.storage || "128GB",
+      location: product.location || "São Paulo, SP",
+      isFeatured: !!product.isFeatured,
+      imagePreset: product.images?.[0] || "https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht"
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveEditedAd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAdId) return;
+
+    if (!editAdData.title || !editAdData.price || !editAdData.model) {
+      alert("Por favor preencha os campos obrigatórios (Título, Preço e Modelo).");
+      return;
+    }
+
+    const priceNum = parseFloat(editAdData.price);
+    if (isNaN(priceNum)) {
+      alert("Insira um preço válido.");
+      return;
+    }
+
+    const token = localStorage.getItem('electromarket_token') || '';
+
+    const payload = {
+      title: editAdData.title,
+      description: editAdData.description || "Nenhuma descrição fornecida.",
+      price: priceNum,
+      brand: editAdData.brand,
+      model: editAdData.model,
+      batteryHealth: editAdData.batteryHealth ? parseInt(editAdData.batteryHealth) : null,
+      storage: editAdData.storage,
+      location: editAdData.location,
+      isFeatured: editAdData.isFeatured,
+      images: [editAdData.imagePreset]
+    };
+
+    try {
+      const response = await fetch(`https://electromarket-s30g.onrender.com/api/ads/${editingAdId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro no servidor HTTP ${response.status}`);
+      }
+
+      // Se a API responder com sucesso
+      setProducts(prevProducts => prevProducts.map(p => {
+        if (p.id === editingAdId) {
+          return {
+            ...p,
+            title: editAdData.title,
+            description: editAdData.description || "Nenhuma descrição fornecida.",
+            price: priceNum,
+            brand: editAdData.brand,
+            model: editAdData.model,
+            batteryHealth: editAdData.batteryHealth ? parseInt(editAdData.batteryHealth) : undefined,
+            storage: editAdData.storage,
+            location: editAdData.location,
+            isFeatured: editAdData.isFeatured,
+            images: [editAdData.imagePreset]
+          };
+        }
+        return p;
+      }));
+
+      // Se o produto editado for o atualmente selecionado nos detalhes, atualiza ele também
+      if (selectedProduct && selectedProduct.id === editingAdId) {
+        setSelectedProduct({
+          ...selectedProduct,
+          title: editAdData.title,
+          description: editAdData.description || "Nenhuma descrição fornecida.",
+          price: priceNum,
+          brand: editAdData.brand,
+          model: editAdData.model,
+          batteryHealth: editAdData.batteryHealth ? parseInt(editAdData.batteryHealth) : undefined,
+          storage: editAdData.storage,
+          location: editAdData.location,
+          isFeatured: editAdData.isFeatured,
+          images: [editAdData.imagePreset]
+        });
+      }
+
+      setShowEditModal(false);
+      alert('Anúncio atualizado com sucesso!');
+    } catch (err: any) {
+      console.warn('Conexão direta com a API externa falhou, tentando fallback local...', err);
+      try {
+        await api.put(`/ads/${editingAdId}`, payload);
+        
+        setProducts(prevProducts => prevProducts.map(p => {
+          if (p.id === editingAdId) {
+            return {
+              ...p,
+              title: editAdData.title,
+              description: editAdData.description || "Nenhuma descrição fornecida.",
+              price: priceNum,
+              brand: editAdData.brand,
+              model: editAdData.model,
+              batteryHealth: editAdData.batteryHealth ? parseInt(editAdData.batteryHealth) : undefined,
+              storage: editAdData.storage,
+              location: editAdData.location,
+              isFeatured: editAdData.isFeatured,
+              images: [editAdData.imagePreset]
+            };
+          }
+          return p;
+        }));
+
+        if (selectedProduct && selectedProduct.id === editingAdId) {
+          setSelectedProduct({
+            ...selectedProduct,
+            title: editAdData.title,
+            description: editAdData.description || "Nenhuma descrição fornecida.",
+            price: priceNum,
+            brand: editAdData.brand,
+            model: editAdData.model,
+            batteryHealth: editAdData.batteryHealth ? parseInt(editAdData.batteryHealth) : undefined,
+            storage: editAdData.storage,
+            location: editAdData.location,
+            isFeatured: editAdData.isFeatured,
+            images: [editAdData.imagePreset]
+          });
+        }
+
+        setShowEditModal(false);
+        alert('Anúncio atualizado com sucesso (via API local)!');
+      } catch (localErr: any) {
+        console.error('Falha ao atualizar o anúncio no servidor:', localErr);
+        alert(`Ocorreu um erro ao atualizar o anúncio: ${localErr.message || localErr}`);
       }
     }
   };
@@ -2285,17 +2452,28 @@ export default function App() {
                       </span>
                     )}
 
-                    {/* Botão Excluir para Criador do Anúncio */}
+                    {/* Botões de Ação para Criador do Anúncio */}
                     {currentUser && currentUser.id === product.userId && (
-                      <button
-                        id={`btn-delete-${product.id}`}
-                        title="Excluir Anúncio"
-                        onClick={(e) => handleDeleteAd(product.id, e)}
-                        className="absolute top-3 right-3 bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 rounded-lg shadow-md duration-150 transition-all z-30 hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs font-bold"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                        <span>Excluir</span>
-                      </button>
+                      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-30">
+                        <button
+                          id={`btn-edit-${product.id}`}
+                          title="Editar Anúncio"
+                          onClick={(e) => handleEditAdClick(product, e)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg shadow-md duration-150 transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1 text-xs font-bold"
+                        >
+                          <Pencil className="w-3.5 h-3.5 shrink-0" />
+                          <span>Editar</span>
+                        </button>
+                        <button
+                          id={`btn-delete-${product.id}`}
+                          title="Excluir Anúncio"
+                          onClick={(e) => handleDeleteAd(product.id, e)}
+                          className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 rounded-lg shadow-md duration-150 transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                          <span>Excluir</span>
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -2701,6 +2879,188 @@ export default function App() {
                   className="bg-[#2563eb] text-white hover:bg-blue-700 px-6 py-2 rounded-lg font-bold text-sm shadow"
                 >
                   Salvar e Inserir no Banco
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Ad Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-200 transform animate-in fade-in duration-205 max-h-[90vh] flex flex-col">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-blue-500" />
+                <h3 className="font-title font-bold text-lg">Editar Anúncio</h3>
+              </div>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedAd} className="p-6 gap-4 overflow-y-auto flex-1">
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                  Título do Anúncio *
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Ex: iPhone 14 Pro Max Excelente Estado"
+                  value={editAdData.title}
+                  onChange={(e) => setEditAdData({...editAdData, title: e.target.value})}
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Marca *
+                  </label>
+                  <select 
+                    value={editAdData.brand}
+                    onChange={(e) => setEditAdData({...editAdData, brand: e.target.value})}
+                    className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    <option value="Apple">Apple (iPhone)</option>
+                    <option value="Samsung">Samsung</option>
+                    <option value="Xiaomi">Xiaomi</option>
+                    <option value="Google">Google</option>
+                    <option value="Motorola">Motorola</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Modelo do Aparelho *
+                  </label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: iPhone 14 Pro Max"
+                    value={editAdData.model}
+                    onChange={(e) => setEditAdData({...editAdData, model: e.target.value})}
+                    className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5 mb-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Preço (R$) *
+                  </label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: 4200"
+                    value={editAdData.price}
+                    onChange={(e) => setEditAdData({...editAdData, price: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Saúde Bateria (%)
+                  </label>
+                  <input 
+                    type="number" 
+                    min="50"
+                    max="100"
+                    placeholder="85"
+                    value={editAdData.batteryHealth}
+                    onChange={(e) => setEditAdData({...editAdData, batteryHealth: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                    Armazenamento
+                  </label>
+                  <select
+                    value={editAdData.storage}
+                    onChange={(e) => setEditAdData({...editAdData, storage: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    <option value="64GB">64GB</option>
+                    <option value="128GB">128GB</option>
+                    <option value="256GB">256GB</option>
+                    <option value="512GB">512GB</option>
+                    <option value="1TB">1TB</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                  Localização (Cidade, UF) *
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Ex: São Paulo, SP"
+                  value={editAdData.location}
+                  onChange={(e) => setEditAdData({...editAdData, location: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+
+              <div className="mb-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl p-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 text-left">
+                  Preset de Imagem do Aparelho
+                </label>
+                <select 
+                  value={editAdData.imagePreset}
+                  onChange={(e) => setEditAdData({...editAdData, imagePreset: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white outline-none focus:ring-1 focus:ring-blue-600"
+                >
+                  <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht">iPhone Preset</option>
+                  <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuBp6MX-rQosrE7hr4MRqk76ezQ692T72Fbg6UFynfH3X-Ag96Lf5brEGGzIOeaLHZNXnLQSvthqzUSfMcaL_KDVuvn0O1liA83wfGoJzQmdpdaSjbVa_X9Uj3WOTeaFPO8ecfaB6YgRaHWw_DbNRhxuYf7SPW5zy65EE7aPMtBZFroiQTQq7Vo-LYBR53FP9gxE6ivwc6k-4ZlYEHCx9x5A4ncAUkKcdfi161D-RLdZqYZ2psIj1HMaZRBecdPxoRqHCi1vHe3gmHmJ">Galaxy Preset</option>
+                  <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuDylhGhSPFzQ1UaObLEzMyneaTBT7yjrjigPKCvN_NLxj7aVPW8xVLaaInLW-T9SqjIeLJEIWdbt6r9bqJpEaLqbov-m1cPpfC2R6wyPJ2qui-5AU6GbJ9qMMl1kXBMlX0YC3WFFyqDI5xDiAKIHotAAzUp6bbIqKOpDykPMSnAdYv4fojkmwBtJ_Jlgox61e5aEwG5qmBRlZ-F4olg62J6VD_2JWX250vH08kZBU6sIim6sAru5MTGvwpNNu0KnM7P2N5NSAGUZL2y">Pixel Preset</option>
+                </select>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                  Descrição Detalhada do Estado
+                </label>
+                <textarea 
+                  rows={3}
+                  placeholder="Descreva defeitos, acessórios inclusos, e condições gerais para simular na base."
+                  value={editAdData.description}
+                  onChange={(e) => setEditAdData({...editAdData, description: e.target.value})}
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+
+              <div className="mb-4 flex items-center gap-2 bg-slate-50 p-3 rounded-lg border border-slate-150">
+                <input 
+                  type="checkbox"
+                  id="edit-featured-check"
+                  checked={editAdData.isFeatured}
+                  onChange={(e) => setEditAdData({...editAdData, isFeatured: e.target.checked})}
+                  className="rounded text-blue-600 focus:ring-blue-600 w-4.5 h-4.5"
+                />
+                <label htmlFor="edit-featured-check" className="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                  Marcar como "Destaque" (Adiciona fita especial no card do marketplace)
+                </label>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <button 
+                  type="button" 
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 text-slate-500 hover:text-slate-800 font-bold text-sm"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="bg-blue-600 text-white hover:bg-blue-700 px-6 py-2 rounded-lg font-bold text-sm shadow"
+                >
+                  Salvar Alterações
                 </button>
               </div>
             </form>

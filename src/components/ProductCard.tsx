@@ -1,16 +1,17 @@
 import React from 'react';
 import { Product } from '../types';
-import { Battery, MapPin, Sparkles, Trash2 } from 'lucide-react';
+import { Battery, MapPin, Sparkles, Trash2, Pencil } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProductCardProps {
   product: Product;
   onClick?: () => void;
   onDelete?: (id: string) => void;
+  onEdit?: (product: Product, event: React.MouseEvent) => void;
   key?: string | number;
 }
 
-export default function ProductCard({ product, onClick, onDelete }: ProductCardProps) {
+export default function ProductCard({ product, onClick, onDelete, onEdit }: ProductCardProps) {
   let authContext: any = null;
   try {
     authContext = useAuth();
@@ -103,16 +104,31 @@ export default function ProductCard({ product, onClick, onDelete }: ProductCardP
           </span>
         )}
 
-        {/* Delete button (excluir) for actual ad owner */}
+        {/* Action buttons (Editar e Excluir) for actual ad owner */}
         {user && user.id === product.userId && (
-          <button
-            id={`btn-delete-${product.id}`}
-            title="Excluir Anúncio"
-            onClick={handleDelete}
-            className="absolute bottom-2 right-2 bg-red-650 hover:bg-red-700 text-white p-1.5 rounded-lg border border-red-500 shadow-md transition-all duration-150 z-30 hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          <div className="absolute bottom-2 right-2 flex items-center gap-1.5 z-30">
+            {onEdit && (
+              <button
+                id={`btn-edit-${product.id}`}
+                title="Editar Anúncio"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(product, e);
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-lg border border-blue-500 shadow-md transition-all duration-150 hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              id={`btn-delete-${product.id}`}
+              title="Excluir Anúncio"
+              onClick={handleDelete}
+              className="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-lg border border-red-500 shadow-md transition-all duration-150 hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center font-bold"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
         )}
       </div>
 
