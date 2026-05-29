@@ -40,9 +40,9 @@ export const getOrCreateChat = async (req: AuthRequest, res: Response): Promise<
     }
 
     // Buscar se já existe uma conversa única entre esse comprador, vendedor e produto
-    let chat = await prisma.chat.findUnique({
+    let chat = await prisma.chatRoom.findUnique({
       where: {
-        buyerId_sellerId_productId: {
+        productId_buyerId_sellerId: {
           buyerId,
           sellerId,
           productId
@@ -73,7 +73,7 @@ export const getOrCreateChat = async (req: AuthRequest, res: Response): Promise<
 
     // Se não existir, criamos o registro do chat
     if (!chat) {
-      chat = await prisma.chat.create({
+      chat = await prisma.chatRoom.create({
         data: {
           buyerId,
           sellerId,
@@ -122,7 +122,7 @@ export const getUserChats = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    const chats = await prisma.chat.findMany({
+    const chats = await prisma.chatRoom.findMany({
       where: {
         OR: [
           { buyerId: userId },
@@ -168,7 +168,15 @@ export const getUserChats = async (req: AuthRequest, res: Response): Promise<voi
       }
     });
 
-    res.status(200).json(chats);
+    const mappedChats = chats.map(c => ({
+      ...c,
+      messages: c.messages.map(m => ({
+        ...m,
+        chatId: m.chatRoomId
+      }))
+    }));
+
+    res.status(200).json(mappedChats);
   } catch (error: any) {
     res.status(500).json({
       error: 'Erro ao listar chats do usuário',
@@ -188,7 +196,7 @@ export const getChatMessages = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const chat = await prisma.chat.findUnique({
+    const chat = await prisma.chatRoom.findUnique({
       where: { id },
       include: {
         messages: {
@@ -219,7 +227,12 @@ export const getChatMessages = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    res.status(200).json(chat.messages);
+    const mappedMessages = chat.messages.map(m => ({
+      ...m,
+      chatId: m.chatRoomId
+    }));
+
+    res.status(200).json(mappedMessages);
   } catch (error: any) {
     res.status(500).json({
       error: 'Erro ao buscar o histórico de mensagens',

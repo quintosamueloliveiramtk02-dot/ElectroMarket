@@ -95,31 +95,47 @@ io.on('connection', (socket) => {
   });
 
   // Evento para envio de mensagens em tempo real
-  socket.on('send_message', async (data: { chatId: string; senderId: string; text: string }) => {
-    const { chatId, senderId, text } = data;
+  socket.on('send_message', async (data: { chatId: string; senderId: string; text: string; id?: string; createdAt?: string; sender?: any }) => {
+    const { chatId, senderId, text, id } = data;
 
     try {
-      // Salva no banco de dados através do Prisma
-      const message = await prisma.message.create({
-        data: {
-          chatId,
-          senderId,
-          text,
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              name: true,
-              avatarUrl: true
+      let messageWithChatId: any;
+
+      if (id) {
+        // Se a mensagem já possui ID, significa que ela já foi persistida via HTTP POST no banco de dados.
+        // Apenas retransmitimos para atualizar a tela dos outros usuários em tempo real de forma otimizada.
+        messageWithChatId = {
+          ...data,
+          chatId: chatId || data.chatId
+        };
+      } else {
+        // Salva no banco de dados através do Prisma caso ainda não tenha sido criada via HTTP POST
+        const message = await prisma.message.create({
+          data: {
+            chatRoomId: chatId,
+            senderId,
+            text,
+          },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                name: true,
+                avatarUrl: true
+              }
             }
           }
-        }
-      });
+        });
+
+        messageWithChatId = {
+          ...message,
+          chatId: message.chatRoomId
+        };
+      }
 
       // Retransmite imediatamente para todos os os participantes na mesma sala do Chat
-      io.to(chatId).emit('receive_message', message);
-      console.log(`[Socket.io] Mensagem recebida de ${senderId} na sala ${chatId}: ${text}`);
+      io.to(chatId).emit('receive_message', messageWithChatId);
+      console.log(`[Socket.io] Mensagem retransmitida de ${senderId} na sala ${chatId}: ${text}`);
     } catch (error: any) {
       console.error('[Socket.io] Erro ao processar mensagem enviada:', error.message);
     }
@@ -135,11 +151,44 @@ io.on('connection', (socket) => {
 async function runDatabasePatch() {
   try {
     console.log('[DB-Init] Checking and auto-patching database schema on startup...');
-    // Execute raw SQL to add column if it does not exist yet (compatible with PostgreSQL)
+    
+    // 1. Ensure hasWarranty column exists in Product table
     await prisma.$executeRawUnsafe(
       'ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "hasWarranty" BOOLEAN DEFAULT false;'
     );
     console.log('[DB-Init] Successfully ensured "hasWarranty" column exists in Product table.');
+
+    // 2. Ensure ChatRoom table exists
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "ChatRoom" (
+        "id" TEXT PRIMARY KEY,
+        "productId" TEXT NOT NULL,
+        "buyerId" TEXT NOT NULL,
+        "sellerId" TEXT NOT NULL,
+        "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('[DB-Init] Successfully verified/created "ChatRoom" table.');
+
+    // 3. Ensure unique index on ChatRoom
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "ChatRoom_productId_buyerId_sellerId_key" 
+      ON "ChatRoom"("productId", "buyerId", "sellerId");
+    `);
+    console.log('[DB-Init] Successfully verified unique index on "ChatRoom".');
+
+    // 4. Ensure Message table exists with chatRoomId instead of chatId
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Message" (
+        "id" TEXT PRIMARY KEY,
+        "chatRoomId" TEXT NOT NULL REFERENCES "ChatRoom"("id") ON DELETE CASCADE,
+        "senderId" TEXT NOT NULL,
+        "text" TEXT NOT NULL,
+        "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('[DB-Init] Successfully verified/created "Message" table.');
+
   } catch (error: any) {
     console.warn('[DB-Init] Warning during auto-patch schema execution (could be expected if Neon/RDS doesn\'t support, or on non-Postgres):', error.message || error);
   }

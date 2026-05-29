@@ -1,4 +1,5 @@
-import React, { useState, useTransition, useEffect } from 'react';
+import React, { useState, useTransition, useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 import { api } from './lib/api';
 import {
   Smartphone,
@@ -1604,6 +1605,7 @@ export default function App() {
   const [loadingAds, setLoadingAds] = useState<boolean>(true);
   const [chats, setChats] = useState<Chat[]>(INITIAL_CHATS);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   
   // Supabase Google Auth and local login integration
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -1769,6 +1771,97 @@ export default function App() {
     setCurrentPath(path);
   };
 
+  const socketRef = useRef<any>(null);
+
+  // Estabelece a conexão real-time com o backend via Socket.io
+  useEffect(() => {
+    const socketServer = (import.meta as any).env?.VITE_API_URL
+      ? (import.meta as any).env.VITE_API_URL.replace(/\/api\/?$/, '')
+      : 'http://localhost:5000';
+
+    const socket = io(socketServer, {
+      transports: ['websocket', 'polling']
+    });
+    
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('[Socket.io] Conector habilitado com sucesso no backend:', socketServer);
+    });
+
+    socket.on('receive_message', (newMsg: any) => {
+      console.log('[Socket.io] Nova mensagem real-time recebida do Postgres:', newMsg);
+      setMessages(prev => {
+        if (prev.find(m => m.id === newMsg.id)) return prev;
+        return [...prev, {
+          id: newMsg.id,
+          chatId: newMsg.chatId || newMsg.chatRoomId,
+          senderId: newMsg.senderId,
+          text: newMsg.text,
+          createdAt: newMsg.createdAt
+        }];
+      });
+      setHasNewMessageAlert(true);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  // Evento para entrar em sala após alteração do chat ativo
+  useEffect(() => {
+    if (activeChatId && socketRef.current) {
+      socketRef.current.emit('join_room', activeChatId);
+      console.log(`[Socket.io] Solicitando entrada no canal privado: ${activeChatId}`);
+    }
+  }, [activeChatId]);
+
+  // Carrega salas de chat reais (ChatRoom) do banco de dados na inicialização/mudança do usuário
+  useEffect(() => {
+    const fetchChats = async () => {
+      try {
+        const activeUserId = currentUser ? currentUser.id : "user-buyer-1";
+        // Consome a rota real unificada do banco: GET /api/chats/rooms/:userId
+        const fetchedChats = await api.get<Chat[]>(`/chats/rooms/${activeUserId}`);
+        if (Array.isArray(fetchedChats)) {
+          setChats(fetchedChats);
+        }
+      } catch (err) {
+        console.warn('Erro ao buscar canais de chat do backend real:', err);
+      }
+    };
+
+    fetchChats();
+    // Sincronização secundária via polling para máxima robustez em iframes de desenvolvimento
+    const interval = setInterval(fetchChats, 4000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+  // Carrega o histórico de mensagens reais salvas no banco de dados para a conversa selecionada
+  useEffect(() => {
+    if (!activeChatId) return;
+
+    const fetchMessages = async () => {
+      try {
+        // Consome a rota real unificada do banco: GET /api/chats/rooms/:roomId/messages
+        const fetchedMsgs = await api.get<Message[]>(`/chats/rooms/${activeChatId}/messages`);
+        if (Array.isArray(fetchedMsgs)) {
+          setMessages(prev => {
+            const others = prev.filter(m => (m.chatId || (m as any).chatRoomId) !== activeChatId);
+            return [...others, ...fetchedMsgs];
+          });
+        }
+      } catch (err) {
+        console.warn('Falha nas mensagens do banco:', err);
+      }
+    };
+
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 3000);
+    return () => clearInterval(interval);
+  }, [activeChatId, currentUser]);
+
   // Automatic Chat routing & synchronization effect for /chat?productId=XXX
   useEffect(() => {
     if (currentPath.startsWith("/chat")) {
@@ -1779,33 +1872,45 @@ export default function App() {
         const product = allProds.find(p => p.id === prodId);
         if (product) {
           const activeUser = currentUser || INITIAL_USERS[0];
-          // Check if chat already exists
-          const existingChat = chats.find(c => c.productId === product.id && c.buyerId === activeUser.id);
-          if (existingChat) {
-            setActiveChatId(existingChat.id);
-          } else {
-            // Create new chat
-            const newChatId = `chat-${Date.now()}`;
-            const newChatRecord: Chat = {
-              id: newChatId,
-              buyerId: activeUser.id,
-              sellerId: product.userId,
-              productId: product.id,
-              createdAt: new Date().toISOString()
-            };
+          
+          const openChatViaGateway = async () => {
+            try {
+              // Obtém ou cria a sala real persistente no PostgreSQL via rota POST /chats/rooms
+              const realChat = await api.post<any>('/chats/rooms', {
+                productId: product.id,
+                buyerId: activeUser.id
+              });
 
-            const starterMsg: Message = {
-              id: `msg-${Date.now()}`,
-              chatId: newChatId,
-              senderId: activeUser.id,
-              text: `Olá! Tenho interesse no seu "${product.title}" anunciado por R$ ${product.price.toLocaleString('pt-BR')}.`,
-              createdAt: new Date().toISOString()
-            };
+              if (realChat && realChat.id) {
+                setActiveChatId(realChat.id);
+                setChats(prev => {
+                  if (prev.find(c => c.id === realChat.id)) return prev;
+                  return [realChat, ...prev];
+                });
 
-            setChats(prev => [...prev, newChatRecord]);
-            setMessages(prev => [...prev, starterMsg]);
-            setActiveChatId(newChatId);
-          }
+                // Dispara o texto de interesse inicial reais se for sala nova vazia
+                const messagesList = await api.get<any[]>(`/chats/rooms/${realChat.id}/messages`);
+                if (messagesList.length === 0) {
+                  const initialText = `Olá! Tenho interesse no seu "${product.title}" anunciado por R$ ${product.price.toLocaleString('pt-BR')}.`;
+                  handleSendDynamicMessage(realChat.id, initialText);
+                }
+              }
+            } catch (err) {
+              console.error('[Gateway Chat] Erro na criação de sala via POST /chats/rooms, utilizando memória local:', err);
+              const newChatId = `chat-${Date.now()}`;
+              const newChatRecord: Chat = {
+                id: newChatId,
+                buyerId: activeUser.id,
+                sellerId: product.userId,
+                productId: product.id,
+                createdAt: new Date().toISOString()
+              };
+              setChats(prev => [...prev, newChatRecord]);
+              setActiveChatId(newChatId);
+            }
+          };
+
+          openChatViaGateway();
         }
         // Replace search parameters gracefully
         window.history.replaceState({}, "", "/chat");
@@ -1813,35 +1918,49 @@ export default function App() {
     }
   }, [currentPath, products, currentUser]);
 
-  const handleSendDynamicMessage = (chatIdToUse: string, text: string) => {
+  const handleSendDynamicMessage = async (chatIdToUse: string, text: string) => {
     const senderId = currentUser ? currentUser.id : "user-buyer-1";
-    const newMsg: Message = {
-      id: `msg-${Date.now()}`,
-      chatId: chatIdToUse,
-      senderId: senderId,
-      text: text,
-      createdAt: new Date().toISOString()
-    };
+    
+    try {
+      // Salva no banco de dados através da rota real: POST /api/chats/messages
+      const savedMsg = await api.post<any>('/chats/messages', {
+        chatRoomId: chatIdToUse,
+        senderId: senderId,
+        text: text
+      });
 
-    setMessages(prev => [...prev, newMsg]);
+      console.log('[API] Mensagem enviada e salva com sucesso no PostgreSQL via HTTP POST:', savedMsg);
 
-    // Simulate auto reply from the other participant
-    const activeChat = chats.find(c => c.id === chatIdToUse);
-    if (activeChat) {
-      const isBuyer = senderId === activeChat.buyerId;
-      const partnerId = isBuyer ? activeChat.sellerId : activeChat.buyerId;
-      const otherUser = users.find(u => u.id === partnerId);
-      setTimeout(() => {
-        const replyMsg: Message = {
-          id: `msg-${Date.now() + 1}`,
+      // Em seguida, retransmite o objeto completo (contendo o ID real persistente) pelo Socket.io
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit('send_message', savedMsg);
+      } else {
+        // Fallback local visual caso o Socket esteja instável
+        setMessages(prev => {
+          if (prev.find(m => m.id === savedMsg.id)) return prev;
+          return [...prev, savedMsg];
+        });
+      }
+    } catch (err) {
+      console.warn('[API] Erro ao salvar mensagem via HTTP POST, transmitindo via evento primário do Socket.io:', err);
+      // Se a rota falhar, tentamos enviar direto pelo Socket.io de forma direta
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit('send_message', {
           chatId: chatIdToUse,
-          senderId: partnerId,
-          text: `[Mensagem Automática Simulação] Olá! Recebi sua mensagem: "${text.substring(0, 25)}...". Em breve entrarei em contato pelo telefone ${otherUser?.phone || '(11) 98765-4321'}. Obrigado!`,
+          senderId: senderId,
+          text: text
+        });
+      } else {
+        // Fallback local total visual
+        const newMsg: Message = {
+          id: `msg-${Date.now()}`,
+          chatId: chatIdToUse,
+          senderId: senderId,
+          text: text,
           createdAt: new Date().toISOString()
         };
-        setMessages(prev => [...prev, replyMsg]);
-        setHasNewMessageAlert(true);
-      }, 1500);
+        setMessages(prev => [...prev, newMsg]);
+      }
     }
   };
 
@@ -1854,7 +1973,6 @@ export default function App() {
   // Active details / modal states
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showAnnounceModal, setShowAnnounceModal] = useState<boolean>(false);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [typedMessage, setTypedMessage] = useState<string>("");
 
   // New Ad form state

@@ -17,10 +17,10 @@ model User {
   createdAt    DateTime  @default(now())
 
   // Relations
-  products     Product[]
-  chatsAsBuyer Chat[]    @relation("BuyerChats")
-  chatsAsSeller Chat[]   @relation("SellerChats")
-  messages     Message[]
+  products         Product[]
+  chatRoomsAsBuyer ChatRoom[] @relation("BuyerChatRooms")
+  chatRoomsAsSeller ChatRoom[] @relation("SellerChatRooms")
+  messages         Message[]
 }
 
 model Product {
@@ -41,33 +41,33 @@ model Product {
 
   // Relations
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chats         Chat[]
+  chatRooms     ChatRoom[]
 }
 
-model Chat {
-  id        String   @id @default(uuid())
-  buyerId   String
-  sellerId  String
-  productId String
-  createdAt DateTime @default(now())
+model ChatRoom {
+  id          String    @id @default(uuid())
+  productId   String
+  buyerId     String
+  sellerId    String
+  createdAt   DateTime  @default(now())
+  messages    Message[]
 
   // Relations
-  buyer     User      @relation("BuyerChats", fields: [buyerId], references: [id], onDelete: Cascade)
-  seller    User      @relation("SellerChats", fields: [sellerId], references: [id], onDelete: Cascade)
+  buyer     User      @relation("BuyerChatRooms", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller    User      @relation("SellerChatRooms", fields: [sellerId], references: [id], onDelete: Cascade)
   product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  messages  Message[]
 
-  @@unique([buyerId, sellerId, productId])
+  @@unique([productId, buyerId, sellerId])
 }
 
 model Message {
-  id        String   @id @default(uuid())
-  chatId    String
-  senderId  String
-  text      String
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  chatRoomId String
+  senderId   String
+  text       String
+  createdAt  DateTime @default(now())
 
   // Relations
-  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  chatRoom   ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
 }
