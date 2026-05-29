@@ -1757,7 +1757,51 @@ export default function App() {
   });
   const [selectedImageFiles, setSelectedImageFiles] = useState<File[]>([]);
 
+  const handleDeleteAd = async (adId: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Evita que clique no botão abra os detalhes do produto
 
+    const userConfirmed = window.confirm('Tem certeza que deseja apagar?');
+    if (!userConfirmed) return;
+
+    try {
+      const token = localStorage.getItem('electromarket_token') || '';
+      
+      // Conecta ao endpoint real do Render informado pelo usuário
+      const response = await fetch(`https://electromarket-s30g.onrender.com/api/ads/${adId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Servidor respondeu com status ${response.status}`);
+      }
+
+      // Sucesso na remoção da base
+      setProducts((prevProducts) => prevProducts.filter(p => p.id !== adId));
+      if (selectedProduct && selectedProduct.id === adId) {
+        setSelectedProduct(null);
+      }
+      alert('Anúncio excluído com sucesso!');
+    } catch (err: any) {
+      console.warn('Conexão direta com a API externa falhou, tentando fallback local...', err);
+      
+      // Fallback local via api.delete (nosso helper padrão que gerencia url de ambiente)
+      try {
+        await api.delete(`/ads/${adId}`);
+        setProducts((prevProducts) => prevProducts.filter(p => p.id !== adId));
+        if (selectedProduct && selectedProduct.id === adId) {
+          setSelectedProduct(null);
+        }
+        alert('Anúncio excluído com sucesso (via API local)!');
+      } catch (localErr: any) {
+        console.error('Falha ao excluir o anúncio no servidor:', localErr);
+        alert(`Ocorreu um erro ao excluir o anúncio: ${localErr.message || localErr}`);
+      }
+    }
+  };
 
   const handleCreateAd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2239,6 +2283,19 @@ export default function App() {
                       <span className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm text-slate-800 text-[11px] font-bold px-2 py-1 rounded shadow-sm border border-slate-200">
                         Bateria: {product.batteryHealth}%
                       </span>
+                    )}
+
+                    {/* Botão Excluir para Criador do Anúncio */}
+                    {currentUser && currentUser.id === product.userId && (
+                      <button
+                        id={`btn-delete-${product.id}`}
+                        title="Excluir Anúncio"
+                        onClick={(e) => handleDeleteAd(product.id, e)}
+                        className="absolute top-3 right-3 bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 rounded-lg shadow-md duration-150 transition-all z-30 hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>Excluir</span>
+                      </button>
                     )}
                   </div>
 
