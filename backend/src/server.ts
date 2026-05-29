@@ -131,7 +131,27 @@ io.on('connection', (socket) => {
   });
 });
 
+// Helper to auto-patch database columns if the migration wasn't applied on Render Postgres DB
+async function runDatabasePatch() {
+  try {
+    console.log('[DB-Init] Checking and auto-patching database schema on startup...');
+    // Execute raw SQL to add column if it does not exist yet (compatible with PostgreSQL)
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "hasWarranty" BOOLEAN DEFAULT false;'
+    );
+    console.log('[DB-Init] Successfully ensured "hasWarranty" column exists in Product table.');
+  } catch (error: any) {
+    console.warn('[DB-Init] Warning during auto-patch schema execution (could be expected if Neon/RDS doesn\'t support, or on non-Postgres):', error.message || error);
+  }
+}
+
 // Start server
-server.listen(PORT, () => {
-  console.log(`[ElectroMarket Server] Running with Socket.io on port ${PORT}`);
-});
+const startServer = async () => {
+  await runDatabasePatch();
+  
+  server.listen(PORT, () => {
+    console.log(`[ElectroMarket Server] Running with Socket.io on port ${PORT}`);
+  });
+};
+
+startServer();

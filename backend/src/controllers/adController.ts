@@ -72,22 +72,46 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
       }
     }
 
-    const ad = await prisma.product.create({
-      data: {
-        userId,
-        title: title || "Sem título",
-        description: description || '',
-        price: parsedPrice,
-        brand: brand || "Genérico",
-        model,
-        batteryHealth: parsedBattery,
-        storage: storage || null,
-        images: validatedImages,
-        location,
-        isFeatured: !!isFeatured,
-        hasWarranty: !!hasWarranty || title?.toLowerCase().includes('garantia') || description?.toLowerCase().includes('garantia') || false,
+    let ad;
+    try {
+      ad = await prisma.product.create({
+        data: {
+          userId,
+          title: title || "Sem título",
+          description: description || '',
+          price: parsedPrice,
+          brand: brand || "Genérico",
+          model,
+          batteryHealth: parsedBattery,
+          storage: storage || null,
+          images: validatedImages,
+          location,
+          isFeatured: !!isFeatured,
+          hasWarranty: !!hasWarranty || title?.toLowerCase().includes('garantia') || description?.toLowerCase().includes('garantia') || false,
+        }
+      });
+    } catch (dbError: any) {
+      if (dbError.code === 'P2022' || (dbError.message && dbError.message.includes('hasWarranty'))) {
+        console.warn("Retrying Product.create without hasWarranty because the column doesn't exist in the remote database:", dbError.message);
+        ad = await prisma.product.create({
+          data: {
+            userId,
+            title: title || "Sem título",
+            description: description || '',
+            price: parsedPrice,
+            brand: brand || "Genérico",
+            model,
+            batteryHealth: parsedBattery,
+            storage: storage || null,
+            images: validatedImages,
+            location,
+            isFeatured: !!isFeatured,
+          } as any
+        });
+      } else {
+        throw dbError;
       }
-    });
+    }
 
     res.status(201).json({
       message: 'Anúncio publicado com sucesso!',
@@ -302,10 +326,24 @@ export const updateAd = async (req: AuthRequest, res: Response): Promise<void> =
       }
     }
 
-    const updatedAd = await prisma.product.update({
-      where: { id },
-      data: updatedData
-    });
+    let updatedAd;
+    try {
+      updatedAd = await prisma.product.update({
+        where: { id },
+        data: updatedData
+      });
+    } catch (dbError: any) {
+      if (dbError.code === 'P2022' || (dbError.message && dbError.message.includes('hasWarranty'))) {
+        console.warn("Retrying Product.update without hasWarranty because the column doesn't exist in the remote database:", dbError.message);
+        const { hasWarranty: _, ...dataWithoutWarranty} = updatedData;
+        updatedAd = await prisma.product.update({
+          where: { id },
+          data: dataWithoutWarranty as any
+        });
+      } else {
+        throw dbError;
+      }
+    }
 
     res.status(200).json({
       message: 'Anúncio atualizado com sucesso!',
