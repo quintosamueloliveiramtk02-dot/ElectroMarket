@@ -37,6 +37,8 @@ import { User, Product, Chat, Message } from './types';
 import { supabase } from './lib/supabaseClient';
 import ProductDetails from './components/ProductDetails';
 import ChatWindow from './components/ChatWindow';
+import ProductSkeletonGrid from './components/ProductSkeletonGrid';
+import { motion, AnimatePresence } from 'motion/react';
 
 // Let's create the hardcoded database code representations to display & copy easily.
 const SCHEMA_PRISMA_CODE = `datasource db {
@@ -1746,6 +1748,13 @@ export default function App() {
 
   // Simple state-based router for single-page dynamic layouts
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [hasNewMessageAlert, setHasNewMessageAlert] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (currentPath.startsWith("/chat")) {
+      setHasNewMessageAlert(false);
+    }
+  }, [currentPath]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -1831,6 +1840,7 @@ export default function App() {
           createdAt: new Date().toISOString()
         };
         setMessages(prev => [...prev, replyMsg]);
+        setHasNewMessageAlert(true);
       }, 1500);
     }
   };
@@ -2258,6 +2268,7 @@ export default function App() {
           createdAt: new Date().toISOString()
         };
         setMessages(prev => [...prev, replyMsg]);
+        setHasNewMessageAlert(true);
       }, 1500);
     }
   };
@@ -2327,11 +2338,17 @@ export default function App() {
             <button 
               onClick={() => { navigate("/chat"); }}
               className="border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-lg font-semibold text-sm transition flex items-center gap-1.5 cursor-pointer"
+              id="btn-header-chats-link"
             >
               <MessageSquare className="w-4.5 h-4.5 text-[#2563eb]" />
               <span className="hidden lg:inline">Chats de Negociação</span>
               {chats.length > 0 && (
-                <span className="bg-red-500 text-white w-2 h-2 rounded-full inline-block"></span>
+                <span className="relative flex h-2.5 w-2.5">
+                  {hasNewMessageAlert && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  )}
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${hasNewMessageAlert ? "bg-red-500 animate-pulse bg-red-500" : "bg-red-400"}`}></span>
+                </span>
               )}
             </button>
 
@@ -2386,289 +2403,292 @@ export default function App() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex-grow w-full py-6">
-        {currentPath.startsWith("/anuncio/") ? (
-          adProduct ? (
-            <ProductDetails 
-              product={adProduct} 
-              onNegotiate={() => startChatForProduct(adProduct)} 
-              onBack={() => navigate("/")} 
-            />
-          ) : (
-            <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm my-8">
-              <Package className="w-12 h-12 text-slate-300 mx-auto mb-3 animate-pulse" />
-              <h3 className="text-lg font-bold text-slate-800">Buscando detalhes do anúncio...</h3>
-              <p className="text-slate-500 max-w-md mx-auto text-sm mt-1">
-                Aguarde um instante enquanto localizamos este smartphone no nosso banco de dados.
-              </p>
-              <button 
-                onClick={() => navigate("/")}
-                className="mt-6 bg-[#2563eb] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
-              >
-                Voltar para o Catálogo
-              </button>
-            </div>
-          )
-        ) : currentPath.startsWith("/chat") ? (
-          <ChatWindow
-            currentUser={currentUser || INITIAL_USERS[0]}
-            chats={chats}
-            messages={messages}
-            products={products.length > 0 ? products : INITIAL_PRODUCTS}
-            users={users}
-            onSendMessage={handleSendDynamicMessage}
-            selectedChatIdFromRoute={activeChatId}
-          />
-        ) : (
-          <>
-            {/* Responsive Search for mobile view */}
-        <div className="mb-6 md:hidden relative">
-          <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Pesquisar iPhone, Galaxy, Pixels..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-lg text-sm outline-none shadow-sm focus:ring-2 focus:ring-[#2563eb]"
-          />
-        </div>
-
-        {/* Categories Chips */}
-        <div className="flex items-center gap-2.5 overflow-x-auto pb-4 mb-8 -mx-4 px-4 scrollbar-thin scrollbar-thumb-slate-300">
-          {[
-            { id: "Todos", label: "Todos", icon: null },
-            { id: "iPhone", label: "iPhone", icon: <Smartphone className="w-4 h-4" /> },
-            { id: "Samsung", label: "Samsung", icon: <Smartphone className="w-4 h-4" /> },
-            { id: "Xiaomi", label: "Xiaomi", icon: null },
-            { id: "Motorola", label: "Motorola", icon: <Smartphone className="w-4 h-4" /> },
-            { id: "Outros", label: "Outros", icon: null },
-            { id: "Até R$ 1.500", label: "Até R$ 1.500", icon: <Package className="w-4 h-4" /> },
-            { id: "Bateria 90%+", label: "Bateria 90%+", icon: <CheckCircle className="w-4 h-4" /> },
-            { id: "Garantia Válida", label: "Garantia Válida", icon: null },
-          ].map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold transition whitespace-nowrap border cursor-pointer border-slate-200 shadow-sm ${
-                selectedCategory === cat.id 
-                ? 'bg-slate-900 border-slate-900 text-white' 
-                : 'bg-white text-slate-700 hover:bg-slate-100 hover:border-slate-300'
-              }`}
+        <AnimatePresence mode="wait">
+          {currentPath.startsWith("/anuncio/") ? (
+            <motion.div
+              key={`anuncio-page-${adIdFromUrl || "unknown"}`}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="w-full"
             >
-              {cat.icon}
-              <span>{cat.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Page Content Headers */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold font-title text-slate-900">Anúncios Recentes</h2>
-            <p className="text-sm text-slate-500">Eletrônicos inspecionados com procedência e garantia</p>
-          </div>
-          <span className="text-sm font-semibold text-[#2563eb] flex items-center gap-1.5 hover:underline cursor-pointer">
-            {loadingAds ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                <span className="text-slate-500 font-medium">Buscando ofertas reais...</span>
-              </>
-            ) : (
-              <span>{filteredProducts.length} itens encontrados</span>
-            )}
-          </span>
-        </div>
-
-        {/* Empty Search Result feedback */}
-        {!loadingAds && filteredProducts.length === 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm my-8">
-            <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-slate-800">Nenhum anúncio localizado</h3>
-            <p className="text-slate-500 max-w-md mx-auto text-sm mt-1">
-              Não encontramos nenhum produto que coincida com a categoria "{selectedCategory}" ou termo de busca "{searchQuery}". Tente redefinir os filtros.
-            </p>
-            <button 
-              onClick={() => { setSelectedCategory("Todos"); setSearchQuery(""); }}
-              className="mt-4 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-800 transition"
-            >
-              Limpar Filtros
-            </button>
-          </div>
-        )}
-
-        {/* Products Grid / Skeletons */}
-        {loadingAds ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            {[1, 2, 3, 4].map((n) => (
-              <div key={n} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm animate-pulse">
-                {/* Image Placeholder */}
-                <div className="relative aspect-square bg-slate-200" />
-                {/* Info Block Loading */}
-                <div className="p-4 flex flex-col justify-between h-44">
-                  <div>
-                    <div className="h-3 bg-slate-200 rounded w-1/3 mb-3" />
-                    <div className="h-4 bg-slate-200 rounded w-5/6 mb-2" />
-                    <div className="h-4 bg-slate-200 rounded w-1/2 mb-1" />
-                  </div>
-                  <div>
-                    <div className="flex gap-1.5 mb-4">
-                      <div className="h-5 bg-slate-100 rounded w-12 border border-slate-200/50" />
-                      <div className="h-5 bg-slate-100 rounded w-16 border border-slate-200/50" />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="h-6 bg-blue-50 rounded w-24" />
-                      <div className="h-8 w-8 bg-slate-100 rounded-lg" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            {filteredProducts.map(product => {
-              const seller = users.find(u => u.id === product.userId);
-              return (
-                <div 
-                  key={product.id}
-                  className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm group hover:shadow-lg transition-all transform hover:-translate-y-1 relative duration-200 cursor-pointer"
-                  onClick={() => navigate(`/anuncio/${product.id}`)}
-                >
-                  {/* Image & tag wrapper */}
-                  <div className="relative aspect-square overflow-hidden bg-slate-100">
-                    <img 
-                      src={product.images[0]} 
-                      alt={product.title}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    
-                    {/* Badges */}
-                    {product.isFeatured && (
-                      <span className="absolute top-3 left-3 bg-[#141b2b]/95 text-white text-[10px] uppercase font-extrabold px-2 py-0.5 rounded tracking-wide shadow-md flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-amber-400 fill-amber-400" />
-                        <span>Destaque</span>
-                      </span>
-                    )}
-                    
-                    {product.price <= 2000 && !product.isFeatured && (
-                      <span className="absolute top-3 left-3 bg-rose-600 font-extrabold text-[#fff] text-[10px] uppercase px-2 py-0.5 rounded tracking-wide shadow-md">
-                        Oportunidade
-                      </span>
-                    )}
-
-                    {/* Battery Health Display Badge */}
-                    {product.batteryHealth && (
-                      <span className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm text-slate-800 text-[11px] font-bold px-2 py-1 rounded shadow-sm border border-slate-200">
-                        Bateria: {product.batteryHealth}%
-                      </span>
-                    )}
-
-                    {/* Botões de Ação para Criador do Anúncio */}
-                    {currentUser && currentUser.id === product.userId && (
-                      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-30">
-                        <button
-                          id={`btn-edit-${product.id}`}
-                          title="Editar Anúncio"
-                          onClick={(e) => handleEditAdClick(product, e)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg shadow-md duration-150 transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1 text-xs font-bold"
-                        >
-                          <Pencil className="w-3.5 h-3.5 shrink-0" />
-                          <span>Editar</span>
-                        </button>
-                        <button
-                          id={`btn-delete-${product.id}`}
-                          title="Excluir Anúncio"
-                          onClick={(e) => handleDeleteAd(product.id, e)}
-                          className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 rounded-lg shadow-md duration-150 transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs font-bold"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                          <span>Excluir</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info block */}
-                  <div className="p-4 flex flex-col justify-between h-44">
-                    <div>
-                      <div className="text-slate-500 text-xs flex items-center gap-1 mb-1 font-medium">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span>{product.location}</span>
-                      </div>
-
-                      <h3 className="font-title font-bold text-base text-slate-900 group-hover:text-[#2563eb] leading-snug line-clamp-2 transition-colors">
-                        {product.title}
-                      </h3>
-                    </div>
-
-                    <div>
-                      {/* Tags */}
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {product.storage && (
-                          <span className="bg-slate-100 text-slate-600 font-mono text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-200">
-                            {product.storage}
-                          </span>
-                        )}
-                        <span className="bg-slate-100 text-slate-600 font-mono text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-200">
-                          {product.brand}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <p className="font-title font-bold text-lg text-[#004ac6]">
-                          R$ {product.price.toLocaleString('pt-BR')}
-                        </p>
-                        <button className="bg-slate-100 hover:bg-[#2563eb] hover:text-white text-slate-700 p-2 rounded-lg transition-all transform translate-y-2 group-hover:translate-y-0 opacity-80 group-hover:opacity-100">
-                          <ChevronRight className="w-4.5 h-4.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Newsletter CTA Area */}
-        <section className="bg-[#2563eb] text-white rounded-2xl p-8 sm:p-12 mb-12 flex flex-col lg:flex-row items-center justify-between gap-6 shadow-md relative overflow-hidden">
-          <div className="absolute right-0 top-0 -translate-y-12 translate-x-12 opacity-10 pointer-events-none">
-            <Smartphone className="w-96 h-96" />
-          </div>
-          
-          <div className="max-w-xl z-10">
-            <h2 className="font-title text-2xl sm:text-3xl font-bold tracking-tight mb-2">Não perca a oferta perfeita.</h2>
-            <p className="text-blue-100 text-sm sm:text-base leading-relaxed">
-              Assine para receber alertas de novos anúncios de iPhones, Samsung e outros smartphones seminovos inspecionados que cabem no seu orçamento.
-            </p>
-          </div>
-
-          <form onSubmit={(e) => { e.preventDefault(); setNewsletterSubscribed(true); }} className="w-full lg:w-auto flex flex-col sm:flex-row gap-3 z-10">
-            {!newsletterSubscribed ? (
-              <>
-                <input 
-                  type="email" 
-                  required
-                  placeholder="Seu melhor e-mail"
-                  value={newsletterEmail}
-                  onChange={(e) => setNewsletterEmail(e.target.value)}
-                  className="bg-white/15 border border-white/20 text-white placeholder-white/60 focus:bg-white focus:text-slate-950 focus:ring-2 focus:ring-white/50 rounded-lg px-4 py-3 text-sm flex-grow md:w-80 outline-none transition"
+              {adProduct ? (
+                <ProductDetails 
+                  product={adProduct} 
+                  onNegotiate={() => startChatForProduct(adProduct)} 
+                  onBack={() => navigate("/")} 
                 />
-                <button type="submit" className="bg-white text-[#2563eb] hover:bg-blue-50 px-6 py-3 rounded-lg font-bold text-sm transition active:scale-95 whitespace-nowrap shadow">
-                  Assinar Alertas
-                </button>
-              </>
-            ) : (
-              <div className="bg-white/10 backdrop-blur-sm border border-white/20 p-3.5 rounded-lg text-sm font-semibold text-emerald-300 flex items-center gap-2">
-                <CheckCircle className="w-5 h-5" />
-                <span>E-mail cadastrado! Você receberá alertas do ElectroMarket.</span>
+              ) : (
+                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm my-8">
+                  <Package className="w-12 h-12 text-slate-300 mx-auto mb-3 animate-pulse" />
+                  <h3 className="text-lg font-bold text-slate-800">Buscando detalhes do anúncio...</h3>
+                  <p className="text-slate-500 max-w-md mx-auto text-sm mt-1">
+                    Aguarde um instante enquanto localizamos este smartphone no nosso banco de dados.
+                  </p>
+                  <button 
+                    onClick={() => navigate("/")}
+                    className="mt-6 bg-[#2563eb] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+                  >
+                    Voltar para o Catálogo
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          ) : currentPath.startsWith("/chat") ? (
+            <motion.div
+              key="chat-page"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="w-full flex flex-col"
+            >
+              <ChatWindow
+                currentUser={currentUser || INITIAL_USERS[0]}
+                chats={chats}
+                messages={messages}
+                products={products.length > 0 ? products : INITIAL_PRODUCTS}
+                users={users}
+                onSendMessage={handleSendDynamicMessage}
+                selectedChatIdFromRoute={activeChatId}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="catalog-page"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="w-full"
+            >
+              {/* Responsive Search for mobile view */}
+              <div className="mb-6 md:hidden relative">
+                <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Pesquisar iPhone, Galaxy, Pixels..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-lg text-sm outline-none shadow-sm focus:ring-2 focus:ring-[#2563eb]"
+                />
               </div>
-            )}
-          </form>
-        </section>
-          </>
-        )}
 
+              {/* Categories Chips */}
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-4 mb-8 -mx-4 px-4 scrollbar-thin scrollbar-thumb-slate-300">
+                {[
+                  { id: "Todos", label: "Todos", icon: null },
+                  { id: "iPhone", label: "iPhone", icon: <Smartphone className="w-4 h-4" /> },
+                  { id: "Samsung", label: "Samsung", icon: <Smartphone className="w-4 h-4" /> },
+                  { id: "Xiaomi", label: "Xiaomi", icon: null },
+                  { id: "Motorola", label: "Motorola", icon: <Smartphone className="w-4 h-4" /> },
+                  { id: "Outros", label: "Outros", icon: null },
+                  { id: "Até R$ 1.500", label: "Até R$ 1.500", icon: <Package className="w-4 h-4" /> },
+                  { id: "Bateria 90%+", label: "Bateria 90%+", icon: <CheckCircle className="w-4 h-4" /> },
+                  { id: "Garantia Válida", label: "Garantia Válida", icon: null },
+                ].map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`flex items-center gap-1.5 px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold transition whitespace-nowrap border cursor-pointer border-slate-200 shadow-sm ${
+                      selectedCategory === cat.id 
+                      ? 'bg-slate-900 border-slate-900 text-white' 
+                      : 'bg-white text-slate-700 hover:bg-slate-100 hover:border-slate-300'
+                    }`}
+                  >
+                    {cat.icon}
+                    <span>{cat.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Page Content Headers */}
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold font-title text-slate-900">Anúncios Recentes</h2>
+                  <p className="text-sm text-slate-500">Eletrônicos inspecionados com procedência e garantia</p>
+                </div>
+                <span className="text-sm font-semibold text-[#2563eb] flex items-center gap-1.5 hover:underline cursor-pointer">
+                  {loadingAds ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                      <span className="text-slate-500 font-medium">Buscando ofertas reais...</span>
+                    </>
+                  ) : (
+                    <span>{filteredProducts.length} itens encontrados</span>
+                  )}
+                </span>
+              </div>
+
+              {/* Empty Search Result feedback */}
+              {!loadingAds && filteredProducts.length === 0 && (
+                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm my-8">
+                  <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <h3 className="text-lg font-bold text-slate-800">Nenhum anúncio localizado</h3>
+                  <p className="text-slate-500 max-w-md mx-auto text-sm mt-1">
+                    Não encontramos nenhum produto que coincida com a categoria "{selectedCategory}" ou termo de busca "{searchQuery}". Tente redefinir os filtros.
+                  </p>
+                  <button 
+                    onClick={() => { setSelectedCategory("Todos"); setSearchQuery(""); }}
+                    className="mt-4 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-800 transition"
+                  >
+                    Limpar Filtros
+                  </button>
+                </div>
+              )}
+
+              {/* Products Grid / Skeletons */}
+              {loadingAds ? (
+                <div id="loading-skeletons" className="mb-12">
+                  <ProductSkeletonGrid />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                  {filteredProducts.map(product => {
+                    const seller = users.find(u => u.id === product.userId);
+                    return (
+                      <div 
+                        key={product.id}
+                        className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm group hover:shadow-lg transition-all transform hover:-translate-y-1 relative duration-200 cursor-pointer"
+                        onClick={() => navigate(`/anuncio/${product.id}`)}
+                      >
+                        {/* Image & tag wrapper */}
+                        <div className="relative aspect-square overflow-hidden bg-slate-100">
+                          <img 
+                            src={product.images[0]} 
+                            alt={product.title}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                          
+                          {/* Badges */}
+                          {product.isFeatured && (
+                            <span className="absolute top-3 left-3 bg-[#141b2b]/95 text-white text-[10px] uppercase font-extrabold px-2 py-0.5 rounded tracking-wide shadow-md flex items-center gap-1">
+                              <Sparkles className="w-3 h-3 text-amber-400 fill-amber-400" />
+                              <span>Destaque</span>
+                            </span>
+                          )}
+                          
+                          {product.price <= 2000 && !product.isFeatured && (
+                            <span className="absolute top-3 left-3 bg-rose-600 font-extrabold text-[#fff] text-[10px] uppercase px-2 py-0.5 rounded tracking-wide shadow-md">
+                              Oportunidade
+                            </span>
+                          )}
+
+                          {/* Battery Health Display Badge */}
+                          {product.batteryHealth && (
+                            <span className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm text-slate-800 text-[11px] font-bold px-2 py-1 rounded shadow-sm border border-slate-200">
+                              Bateria: {product.batteryHealth}%
+                            </span>
+                          )}
+
+                          {/* Botões de Ação para Criador do Anúncio */}
+                          {currentUser && currentUser.id === product.userId && (
+                            <div className="absolute top-3 right-3 flex items-center gap-1.5 z-30">
+                              <button
+                                id={`btn-edit-${product.id}`}
+                                title="Editar Anúncio"
+                                onClick={(e) => handleEditAdClick(product, e)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg shadow-md duration-150 transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1 text-xs font-bold"
+                              >
+                                <Pencil className="w-3.5 h-3.5 shrink-0" />
+                                <span>Editar</span>
+                              </button>
+                              <button
+                                id={`btn-delete-${product.id}`}
+                                title="Excluir Anúncio"
+                                onClick={(e) => handleDeleteAd(product.id, e)}
+                                className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 rounded-lg shadow-md duration-150 transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                                <span>Excluir</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Info block */}
+                        <div className="p-4 flex flex-col justify-between h-44">
+                          <div>
+                            <div className="text-slate-500 text-xs flex items-center gap-1 mb-1 font-medium">
+                              <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span>{product.location}</span>
+                            </div>
+
+                            <h3 className="font-title font-bold text-base text-slate-900 group-hover:text-[#2563eb] leading-snug line-clamp-2 transition-colors">
+                              {product.title}
+                            </h3>
+                          </div>
+
+                          <div>
+                            {/* Tags */}
+                            <div className="flex flex-wrap gap-1 mb-3">
+                              {product.storage && (
+                                <span className="bg-slate-100 text-slate-600 font-mono text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-200">
+                                  {product.storage}
+                                </span>
+                              )}
+                              <span className="bg-slate-100 text-slate-600 font-mono text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-200">
+                                {product.brand}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <p className="font-title font-bold text-lg text-[#004ac6]">
+                                R$ {product.price.toLocaleString('pt-BR')}
+                              </p>
+                              <button className="bg-slate-100 hover:bg-[#2563eb] hover:text-white text-slate-700 p-2 rounded-lg transition-all transform translate-y-2 group-hover:translate-y-0 opacity-80 group-hover:opacity-100">
+                                <ChevronRight className="w-4.5 h-4.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Newsletter CTA Area */}
+              <section className="bg-[#2563eb] text-white rounded-2xl p-8 sm:p-12 mb-12 flex flex-col lg:flex-row items-center justify-between gap-6 shadow-md relative overflow-hidden">
+                <div className="absolute right-0 top-0 -translate-y-12 translate-x-12 opacity-10 pointer-events-none">
+                  <Smartphone className="w-96 h-96" />
+                </div>
+                
+                <div className="max-w-xl z-10">
+                  <h2 className="font-title text-2xl sm:text-3xl font-bold tracking-tight mb-2">Não perca a oferta perfeita.</h2>
+                  <p className="text-blue-100 text-sm sm:text-base leading-relaxed">
+                    Assine para receber alertas de novos anúncios de iPhones, Samsung e outros smartphones seminovos inspecionados que cabem no seu orçamento.
+                  </p>
+                </div>
+
+                <form onSubmit={(e) => { e.preventDefault(); setNewsletterSubscribed(true); }} className="w-full lg:w-auto flex flex-col sm:flex-row gap-3 z-10">
+                  {!newsletterSubscribed ? (
+                    <>
+                      <input 
+                        type="email" 
+                        required
+                        placeholder="Seu melhor e-mail"
+                        value={newsletterEmail}
+                        onChange={(e) => setNewsletterEmail(e.target.value)}
+                        className="bg-white/15 border border-white/20 text-white placeholder-white/60 focus:bg-white focus:text-slate-950 focus:ring-2 focus:ring-white/50 rounded-lg px-4 py-3 text-sm flex-grow md:w-80 outline-none transition"
+                      />
+                      <button type="submit" className="bg-white text-[#2563eb] hover:bg-blue-50 px-6 py-3 rounded-lg font-bold text-sm transition active:scale-95 whitespace-nowrap shadow">
+                        Assinar Alertas
+                      </button>
+                    </>
+                  ) : (
+                    <div className="bg-white/10 backdrop-blur-sm border border-white/20 p-3.5 rounded-lg text-sm font-semibold text-emerald-300 flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5" />
+                      <span>E-mail cadastrado! Você receberá alertas do ElectroMarket.</span>
+                    </div>
+                  )}
+                </form>
+              </section>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* Product Detail Modal */}
