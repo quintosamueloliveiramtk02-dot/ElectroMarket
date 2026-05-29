@@ -12,7 +12,7 @@ cloudinary.config({
 // 1. Criar um anúncio associado ao ID do usuário autenticado
 export const createAd = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, description, price, brand, model, batteryHealth, storage, images, location, isFeatured, userId: bodyUserId } = req.body;
+    const { title, description, price, brand, model, batteryHealth, storage, images, location, isFeatured, hasWarranty, userId: bodyUserId } = req.body;
     let userId = req.userId || bodyUserId;
 
     // Garantir ID de usuário válido para evitar falha por Integridade Referencial (Foreign Key)
@@ -85,6 +85,7 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
         images: validatedImages,
         location,
         isFeatured: !!isFeatured,
+        hasWarranty: !!hasWarranty || title?.toLowerCase().includes('garantia') || description?.toLowerCase().includes('garantia') || false,
       }
     });
 
@@ -102,12 +103,43 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
 // 2. Filtrar e listar todos os anúncios públicos
 export const getAllAds = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { brand, minPrice, maxPrice, storage, search, isFeatured } = req.query;
+    const { brand, minPrice, maxPrice, storage, search, isFeatured, filter } = req.query;
 
     const whereClause: any = {};
 
-    // Filtro por Marca
-    if (brand && typeof brand === 'string') {
+    // Lógica de Filtros Avançados (Etapa 2)
+    if (filter && typeof filter === 'string') {
+      const activeF = filter.trim();
+      if (activeF === 'iPhone' || activeF === 'Apple') {
+        whereClause.brand = {
+          in: ['Apple', 'iPhone'],
+          mode: 'insensitive',
+        };
+      } else if (['Samsung', 'Xiaomi', 'Motorola'].includes(activeF)) {
+        whereClause.brand = {
+          equals: activeF,
+          mode: 'insensitive',
+        };
+      } else if (activeF === 'Outros') {
+        whereClause.brand = {
+          notIn: ['Apple', 'iPhone', 'Samsung', 'Xiaomi', 'Motorola'],
+          mode: 'insensitive',
+        };
+      } else if (activeF === 'Até R$ 1.500') {
+        whereClause.price = {
+          lte: 1500,
+        };
+      } else if (activeF === 'Bateria 90%+') {
+        whereClause.batteryHealth = {
+          gte: 90,
+        };
+      } else if (activeF === 'Garantia Válida') {
+        whereClause.hasWarranty = true;
+      }
+    }
+
+    // Filtro por Marca (se passar explicitamente e não conflitar)
+    if (brand && typeof brand === 'string' && !whereClause.brand) {
       whereClause.brand = {
         equals: brand,
         mode: 'insensitive',
@@ -219,7 +251,7 @@ export const updateAd = async (req: AuthRequest, res: Response): Promise<void> =
   try {
     const { id } = req.params;
     const userId = req.userId;
-    const { title, description, price, brand, model, batteryHealth, storage, images, location, isFeatured } = req.body;
+    const { title, description, price, brand, model, batteryHealth, storage, images, location, isFeatured, hasWarranty } = req.body;
 
     if (!userId) {
       res.status(401).json({ error: 'Não autorizado' });
@@ -260,6 +292,15 @@ export const updateAd = async (req: AuthRequest, res: Response): Promise<void> =
     if (images !== undefined && Array.isArray(images)) updatedData.images = images;
     if (location !== undefined) updatedData.location = location;
     if (isFeatured !== undefined) updatedData.isFeatured = !!isFeatured;
+    if (hasWarranty !== undefined) {
+      updatedData.hasWarranty = !!hasWarranty;
+    } else if (title !== undefined || description !== undefined) {
+      const checkTitle = title !== undefined ? title : ad.title;
+      const checkDesc = description !== undefined ? description : ad.description;
+      if (checkTitle && (checkTitle.toLowerCase().includes('garantia') || checkDesc.toLowerCase().includes('garantia'))) {
+        updatedData.hasWarranty = true;
+      }
+    }
 
     const updatedAd = await prisma.product.update({
       where: { id },

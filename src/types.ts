@@ -21,6 +21,7 @@ export interface Product {
   images: string[];
   location: string;
   isFeatured: boolean;
+  hasWarranty?: boolean;
   createdAt: string;
 }
 

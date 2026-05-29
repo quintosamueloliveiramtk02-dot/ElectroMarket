@@ -1706,11 +1706,22 @@ export default function App() {
     setCurrentUser(null);
   };
 
-  // Carrega anúncios reais do backend da Render (banco Supabase) na montagem do componente
+  // Interface states
+  const [selectedCategory, setSelectedCategory] = useState<string>("Todos");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [newsletterEmail, setNewsletterEmail] = useState<string>("");
+  const [newsletterSubscribed, setNewsletterSubscribed] = useState<boolean>(false);
+
+  // Carrega anúncios reais do backend da Render (banco Supabase) ao montar ou mudar filtro de categoria
   useEffect(() => {
     const fetchAds = async () => {
+      setLoadingAds(true);
       try {
-        const data = await api.get<Product[]>('/ads');
+        let url = '/ads';
+        if (selectedCategory && selectedCategory !== 'Todos') {
+          url += `?filter=${encodeURIComponent(selectedCategory)}`;
+        }
+        const data = await api.get<Product[]>(url);
         if (Array.isArray(data)) {
           setProducts(data);
         } else {
@@ -1726,13 +1737,7 @@ export default function App() {
       }
     };
     fetchAds();
-  }, []);
-
-  // Interface states
-  const [selectedCategory, setSelectedCategory] = useState<string>("Todos");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [newsletterEmail, setNewsletterEmail] = useState<string>("");
-  const [newsletterSubscribed, setNewsletterSubscribed] = useState<boolean>(false);
+  }, [selectedCategory]);
   
   // Chat modal state
   const [showChatModal, setShowChatModal] = useState<boolean>(false);
@@ -2195,13 +2200,16 @@ export default function App() {
   };
 
   const filteredProducts = products.filter(p => {
+    const brandLower = p.brand?.toLowerCase() || "";
     const matchesCategory = selectedCategory === "Todos" || 
-      (selectedCategory === "iPhone" && p.brand === "Apple") || 
-      (selectedCategory === "Samsung" && p.brand === "Samsung") ||
-      (selectedCategory === "Xiaomi" && p.brand === "Xiaomi") ||
+      (selectedCategory === "iPhone" && (brandLower === "apple" || brandLower === "iphone")) || 
+      (selectedCategory === "Samsung" && brandLower === "samsung") ||
+      (selectedCategory === "Xiaomi" && brandLower === "xiaomi") ||
+      (selectedCategory === "Motorola" && brandLower === "motorola") ||
+      (selectedCategory === "Outros" && !["apple", "iphone", "samsung", "xiaomi", "motorola"].includes(brandLower)) ||
       (selectedCategory === "Até R$ 1.500" && p.price <= 1500) ||
       (selectedCategory === "Bateria 90%+" && p.batteryHealth && p.batteryHealth >= 90) ||
-      (selectedCategory === "Garantia Válida" && (p.title.toLowerCase().includes("garantia") || p.description.toLowerCase().includes("garantia")));
+      (selectedCategory === "Garantia Válida" && (!!p.hasWarranty || p.title?.toLowerCase().includes("garantia") || p.description?.toLowerCase().includes("garantia")));
 
     const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
       p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -2330,6 +2338,8 @@ export default function App() {
             { id: "iPhone", label: "iPhone", icon: <Smartphone className="w-4 h-4" /> },
             { id: "Samsung", label: "Samsung", icon: <Smartphone className="w-4 h-4" /> },
             { id: "Xiaomi", label: "Xiaomi", icon: null },
+            { id: "Motorola", label: "Motorola", icon: <Smartphone className="w-4 h-4" /> },
+            { id: "Outros", label: "Outros", icon: null },
             { id: "Até R$ 1.500", label: "Até R$ 1.500", icon: <Package className="w-4 h-4" /> },
             { id: "Bateria 90%+", label: "Bateria 90%+", icon: <CheckCircle className="w-4 h-4" /> },
             { id: "Garantia Válida", label: "Garantia Válida", icon: null },
