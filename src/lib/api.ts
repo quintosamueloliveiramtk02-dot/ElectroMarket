@@ -69,7 +69,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 
     return response.json() as Promise<T>;
   } catch (err: any) {
-    console.error(`[API Network Error] Falha de rede/conexão para ${url}:`, err);
+    console.warn(`[API Network Error] Falha de rede/conexão para ${url}:`, err);
     throw err;
   }
 }

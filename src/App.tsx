@@ -1730,7 +1730,7 @@ export default function App() {
           setProducts(INITIAL_PRODUCTS);
         }
       } catch (err: any) {
-        console.error('Erro ao buscar anúncios do backend real:', err);
+        console.warn('Erro ao buscar anúncios do backend real:', err);
         // Fallback gracioso mantendo os hardcoded se a API falhar no sandbox
         setProducts(INITIAL_PRODUCTS);
       } finally {
