@@ -184,13 +184,68 @@ async function runDatabasePatch() {
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "Message" (
         "id" TEXT PRIMARY KEY,
-        "chatRoomId" TEXT NOT NULL REFERENCES "ChatRoom"("id") ON DELETE CASCADE,
+        "chatRoomId" TEXT,
         "senderId" TEXT NOT NULL,
         "text" TEXT NOT NULL,
         "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
     console.log('[DB-Init] Successfully verified/created "Message" table.');
+
+    try {
+      // In physical PG, tables or index columns may be mixed case. Let's do a case-insensitive check and rename
+      await prisma.$executeRawUnsafe(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE lower(table_name)='message' AND lower(column_name)='chatid'
+          ) AND NOT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE lower(table_name)='message' AND lower(column_name)='chatroomid'
+          ) THEN
+            ALTER TABLE "Message" RENAME COLUMN "chatId" TO "chatRoomId";
+          END IF;
+        END $$;
+      `);
+      console.log('[DB-Init] Checked and renamed chatId to chatRoomId in Message table if needed.');
+    } catch (colErr: any) {
+      console.warn('[DB-Init] Columns check/rename skipped or not supported:', colErr.message || colErr);
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "chatRoomId" TEXT;'
+      );
+      console.log('[DB-Init] Checked/Ensured "chatRoomId" column exists in Message table.');
+    } catch (alterErr: any) {
+      console.warn('[DB-Init] Ensure "chatRoomId" column step skipped:', alterErr.message || alterErr);
+    }
+
+    try {
+      // Sync chatId to chatRoomId if both exist (backwards compatibility fallback)
+      await prisma.$executeRawUnsafe(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE lower(table_name)='message' AND lower(column_name)='chatid'
+          ) AND EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE lower(table_name)='message' AND lower(column_name)='chatroomid'
+          ) THEN
+            UPDATE "Message" SET "chatRoomId" = "chatId" WHERE "chatRoomId" IS NULL AND "chatId" IS NOT NULL;
+          END IF;
+        END $$;
+      `);
+      console.log('[DB-Init] Checked and synced existing values of chatId to chatRoomId.');
+    } catch (syncErr: any) {
+      console.warn('[DB-Init] Sync legacy data step skipped:', syncErr.message || syncErr);
+    }
 
   } catch (error: any) {
     console.warn('[DB-Init] Warning during auto-patch schema execution (could be expected if Neon/RDS doesn\'t support, or on non-Postgres):', error.message || error);
