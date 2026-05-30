@@ -3494,7 +3494,7 @@ export default function App() {
               <div className="flex-grow p-4 overflow-y-auto space-y-4 bg-white min-h-0 animate-in fade-in duration-200">
                 {activeChatId ? (
                   messages.filter(m => m.chatId === activeChatId).map(msg => {
-                    const isMe = msg.senderId === "user-buyer-1"; // My profile (Carol Santos)
+                    const isMe = msg.senderId === (currentUser ? currentUser.id : "user-buyer-1"); // My profile (Carol Santos)
                     const senderObj = users.find(u => u.id === msg.senderId);
                     return (
                       <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>

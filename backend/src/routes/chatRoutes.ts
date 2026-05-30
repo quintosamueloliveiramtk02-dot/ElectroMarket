@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getOrCreateChat, getUserChats, getChatMessages } from '../controllers/chatController';
 import { authMiddleware } from '../middlewares/authMiddleware';
 import prisma from '../lib/prisma';
+import jwt from 'jsonwebtoken';
 
 const router = Router();
 
@@ -194,10 +195,31 @@ const createMessageFn = async (req: Request, res: Response): Promise<any> => {
       return res.status(400).json({ error: 'Os campos roomId/chatRoomId, senderId e text são obrigatórios.' });
     }
 
+    // Validação Robusta do Payload (senderId): Se houver token JWT, obriga o uso do ID autenticado para evitar spoofing ou ID incorreto
+    let finalSenderId = senderId;
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      const parts = authHeader.split(' ');
+      if (parts.length === 2) {
+        const [scheme, token] = parts;
+        if (/^Bearer$/i.test(scheme)) {
+          try {
+            const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-electromarket';
+            const decoded = jwt.verify(token, jwtSecret) as { id: string };
+            if (decoded && decoded.id) {
+              finalSenderId = decoded.id;
+            }
+          } catch (jwtErr) {
+            console.warn('[Message-Auth-Validation] Erro ao decodificar token JWT:', jwtErr);
+          }
+        }
+      }
+    }
+
     const message = await prisma.message.create({
       data: {
         chatRoomId: targetRoomId,
-        senderId,
+        senderId: finalSenderId,
         text
       },
       include: {

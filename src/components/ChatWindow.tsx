@@ -338,7 +338,7 @@ export default function ChatWindow({
                 {messages
                   .filter(m => (m.chatRoomId || m.chatId) === (activeChat.chatRoomId || activeChat.id))
                   .map((msg, index) => {
-                    const isMe = msg.senderId === currentUser?.id || msg.senderId === "user-buyer-1";
+                    const isMe = msg.senderId === (currentUser ? currentUser.id : "user-buyer-1");
                     
                     return (
                       <div 

@@ -145,24 +145,30 @@ export default function ChatDetailPage() {
     };
   }, [user, chatId]);
 
-  // Fetching message history from real database via HTTP endpoint
+  // Fetching message history from real database via HTTP endpoint with 3s polling
   useEffect(() => {
     if (!chatId || !user) return;
 
-    const fetchHistory = async () => {
+    const fetchHistory = async (isInitial = false) => {
       try {
-        setLoadingMessages(true);
-        const data = await api.get<MessageWithSender[]>(`/chats/${chatId}/messages`);
+        if (isInitial) setLoadingMessages(true);
+        const data = await api.get<MessageWithSender[]>(`/chats/rooms/${chatId}/messages`);
         setMessages(data);
-        scrollToBottom();
+        if (isInitial) scrollToBottom();
       } catch (err) {
         console.error('Erro ao carregar histórico de mensagens via HTTP:', err);
       } finally {
-        setLoadingMessages(false);
+        if (isInitial) setLoadingMessages(false);
       }
     };
 
-    fetchHistory();
+    fetchHistory(true);
+
+    const interval = setInterval(() => {
+      fetchHistory(false);
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, [chatId, user]);
 
   // Listening to real-time events triggered by server side broadcasts

@@ -148,7 +148,7 @@ export default function ChatPage() {
     };
   }, [user]);
 
-  // Entra na sala do socket toda vez que o Active Chat Id mudar, e busca mensagens via HTTP
+  // Entra na sala do socket toda vez que o Active Chat Id mudar, e busca mensagens via HTTP com polling de 3 segundos
   useEffect(() => {
     if (!activeChatId || !user) return;
 
@@ -158,20 +158,26 @@ export default function ChatPage() {
     }
 
     // Carregar histórico de mensagens via HTTP
-    const fetchHistory = async () => {
+    const fetchHistory = async (isInitial = false) => {
       try {
-        setLoadingMessages(true);
-        const data = await api.get<MessageWithSender[]>(`/chats/${activeChatId}/messages`);
+        if (isInitial) setLoadingMessages(true);
+        const data = await api.get<MessageWithSender[]>(`/chats/rooms/${activeChatId}/messages`);
         setMessages(data);
-        scrollToBottom();
+        if (isInitial) scrollToBottom();
       } catch (err) {
         console.error('Erro ao carregar histórico de mensagens:', err);
       } finally {
-        setLoadingMessages(false);
+        if (isInitial) setLoadingMessages(false);
       }
     };
 
-    fetchHistory();
+    fetchHistory(true);
+
+    const interval = setInterval(() => {
+      fetchHistory(false);
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, [activeChatId, user]);
 
   // Ouvir o recebimento de novas mensagens em tempo real via canal de escuta do socket
