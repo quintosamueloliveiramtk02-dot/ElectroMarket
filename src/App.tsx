@@ -1970,6 +1970,8 @@ export default function App() {
       // Salva no banco de dados através da rota real: POST /api/chats/messages
       const savedMsg = await api.post<any>('/chats/messages', {
         chatRoomId: chatRoomIdToUse,
+        roomId: chatRoomIdToUse,
+        chatId: chatRoomIdToUse,
         senderId: senderId,
         text: text
       });

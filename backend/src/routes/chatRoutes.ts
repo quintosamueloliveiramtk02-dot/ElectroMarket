@@ -16,8 +16,20 @@ router.post('/rooms', async (req: Request, res: Response): Promise<any> => {
   try {
     const { productId, buyerId } = req.body;
 
+    const isUUID = (str: string): boolean => {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    };
+
     if (!productId || !buyerId) {
       return res.status(400).json({ error: 'Os campos productId e buyerId são obrigatórios.' });
+    }
+
+    if (!isUUID(productId)) {
+      return res.status(400).json({ error: 'O campo productId fornecido não é um UUID válido.' });
+    }
+
+    if (!isUUID(buyerId)) {
+      return res.status(400).json({ error: 'O campo buyerId fornecido não é um UUID válido.' });
     }
 
     // Busca o produto para descobrir quem é o vendedor (sellerId)
@@ -119,6 +131,14 @@ router.get('/rooms/:userId', async (req: Request, res: Response): Promise<any> =
   try {
     const { userId } = req.params;
 
+    const isUUID = (str: string): boolean => {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    };
+
+    if (!userId || !isUUID(userId)) {
+      return res.status(200).json([]);
+    }
+
     const chats = await prisma.chatRoom.findMany({
       where: {
         OR: [
@@ -188,12 +208,20 @@ router.get('/rooms/:userId', async (req: Request, res: Response): Promise<any> =
 // 3. POST /api/chats/messages / /api/chats/rooms/messages / /api/chats/rooms/:roomId/messages -> Salva uma mensagem real no banco de dados
 const createMessageFn = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { roomId, chatRoomId, senderId, text } = req.body;
+    const { roomId, chatRoomId, chatId, senderId, text } = req.body;
     const { roomId: paramRoomId } = req.params;
-    const targetRoomId = chatRoomId || roomId || paramRoomId;
+    const targetRoomId = chatRoomId || roomId || chatId || paramRoomId;
+
+    const isUUID = (str: string): boolean => {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    };
 
     if (!targetRoomId || !senderId || !text) {
-      return res.status(400).json({ error: 'Os campos roomId/chatRoomId, senderId e text são obrigatórios.' });
+      return res.status(400).json({ error: 'Os campos roomId/chatRoomId/chatId, senderId e text são obrigatórios.' });
+    }
+
+    if (!isUUID(targetRoomId)) {
+      return res.status(400).json({ error: 'O ID da sala de chat (chatRoomId) fornecido não é um UUID válido.' });
     }
 
     // Validação Robusta do Payload (senderId): Se houver token JWT, obriga o uso do ID autenticado para evitar spoofing ou ID incorreto
@@ -257,6 +285,14 @@ router.post('/rooms/:roomId/messages', createMessageFn);
 router.get('/rooms/:roomId/messages', async (req: Request, res: Response): Promise<any> => {
   try {
     const { roomId } = req.params;
+
+    const isUUID = (str: string): boolean => {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    };
+
+    if (!roomId || !isUUID(roomId)) {
+      return res.status(200).json([]);
+    }
 
     const messages = await prisma.message.findMany({
       where: {

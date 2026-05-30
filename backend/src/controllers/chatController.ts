@@ -18,6 +18,20 @@ export const getOrCreateChat = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
+    const isUUID = (str: string): boolean => {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    };
+
+    if (!isUUID(productId)) {
+      res.status(400).json({ error: 'O ID do produto (productId) fornecido não é um UUID válido.' });
+      return;
+    }
+
+    if (!isUUID(buyerId)) {
+      res.status(400).json({ error: 'O ID do comprador (buyerId) fornecido não é um UUID válido.' });
+      return;
+    }
+
     // Se o sellerId não foi enviado, podemos buscar o dono do produto
     let sellerId = bodySellerId;
     if (!sellerId) {
@@ -31,6 +45,11 @@ export const getOrCreateChat = async (req: AuthRequest, res: Response): Promise<
         return;
       }
       sellerId = product.userId;
+    }
+
+    if (!sellerId || !isUUID(sellerId)) {
+      res.status(400).json({ error: 'O ID do vendedor (sellerId) fornecido ou encontrado não é um UUID válido.' });
+      return;
     }
 
     // Evitar que um usuário abra um chat consigo mesmo
@@ -127,6 +146,15 @@ export const getUserChats = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
+    const isUUID = (str: string): boolean => {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    };
+
+    if (!isUUID(userId)) {
+      res.status(200).json([]);
+      return;
+    }
+
     const chats = await prisma.chatRoom.findMany({
       where: {
         OR: [
@@ -200,6 +228,15 @@ export const getChatMessages = async (req: AuthRequest, res: Response): Promise<
 
     if (!userId) {
       res.status(401).json({ error: 'Não autorizado' });
+      return;
+    }
+
+    const isUUID = (str: string): boolean => {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    };
+
+    if (!id || !isUUID(id)) {
+      res.status(200).json([]);
       return;
     }
 
