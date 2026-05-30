@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import authRoutes from './routes/authRoutes';
 import adRoutes from './routes/adRoutes';
 import chatRoutes from './routes/chatRoutes';
+import userRoutes from './routes/userRoutes';
 import prisma from './lib/prisma';
 import { syncUser } from './controllers/authController';
 
@@ -30,10 +31,11 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// Auth, Ads & Chat routes registration
+// Auth, Ads, User & Chat routes registration
 app.use('/api/auth', authRoutes);
 app.use('/api/ads', adRoutes);
 app.use('/api/chats', chatRoutes);
+app.use('/api/users', userRoutes);
 app.post('/api/users/sync', syncUser);
 
 // Secure database check endpoint

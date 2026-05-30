@@ -39,6 +39,7 @@ import { supabase } from './lib/supabaseClient';
 import ProductDetails from './components/ProductDetails';
 import ChatWindow from './components/ChatWindow';
 import ProductSkeletonGrid from './components/ProductSkeletonGrid';
+import ProfilePage from './app/profile/page';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Let's create the hardcoded database code representations to display & copy easily.
@@ -2555,19 +2556,35 @@ export default function App() {
                       src={currentUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80px&h=80px&q=80'}
                       alt={currentUser.name}
                       referrerPolicy="no-referrer"
-                      className="w-8 h-8 rounded-full border border-slate-200 object-cover"
+                      onClick={() => navigate("/profile")}
+                      className="w-8 h-8 rounded-full border border-slate-200 object-cover cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all"
+                      title="Ver seu perfil"
                     />
-                    <div className="hidden lg:block text-left max-w-[120px]">
-                      <p className="text-xs font-semibold text-slate-800 leading-tight truncate">
+                    <div className="hidden lg:block text-left max-w-[125px]">
+                      <p 
+                        onClick={() => navigate("/profile")}
+                        className="text-xs font-semibold text-slate-800 leading-tight truncate cursor-pointer hover:text-blue-600 transition"
+                        title="Ver seu perfil"
+                      >
                         {currentUser.name}
                       </p>
-                      <button
-                        type="button"
-                        onClick={handleLogout}
-                        className="text-[10px] text-slate-400 hover:text-red-500 font-medium transition cursor-pointer flex items-center gap-0.5"
-                      >
-                        Sair
-                      </button>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => navigate("/profile")}
+                          className="text-[10px] text-blue-600 hover:text-blue-800 font-bold transition cursor-pointer"
+                        >
+                          Meu Perfil
+                        </button>
+                        <span className="text-[10px] text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          className="text-[10px] text-slate-400 hover:text-red-500 font-medium transition cursor-pointer flex items-center gap-0.5"
+                        >
+                          Sair
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2636,6 +2653,20 @@ export default function App() {
                 users={users}
                 onSendMessage={handleSendDynamicMessage}
                 selectedChatIdFromRoute={activeChatId}
+              />
+            </motion.div>
+          ) : currentPath.startsWith("/profile") ? (
+            <motion.div
+              key="profile-page"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="w-full"
+            >
+              <ProfilePage 
+                onBack={() => navigate("/")} 
+                onNavigate={(path) => navigate(path)}
               />
             </motion.div>
           ) : (
