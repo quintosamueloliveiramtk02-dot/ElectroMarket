@@ -65,6 +65,7 @@ model Message {
   chatRoomId String
   senderId   String
   text       String
+  read       Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   // Relations

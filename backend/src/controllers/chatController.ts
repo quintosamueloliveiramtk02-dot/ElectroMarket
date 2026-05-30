@@ -271,8 +271,25 @@ export const getChatMessages = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
+    // Marcar as mensagens recebidas como lidas no banco
+    try {
+      await prisma.message.updateMany({
+        where: {
+          chatRoomId: id,
+          senderId: { not: userId },
+          read: false
+        },
+        data: {
+          read: true
+        }
+      });
+    } catch (err) {
+      console.error("Erro interno ao atualizar status de lido das mensagens:", err);
+    }
+
     const mappedMessages = chat.messages.map(m => ({
       ...m,
+      read: m.senderId !== userId ? true : m.read,
       chatRoomId: m.chatRoomId,
       chatId: m.chatRoomId
     }));
@@ -285,3 +302,36 @@ export const getChatMessages = async (req: AuthRequest, res: Response): Promise<
     });
   }
 };
+
+// Obter total de mensagens não lidas para o usuário autenticado
+export const getUnreadCount = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      res.status(401).json({ error: 'Não autorizado' });
+      return;
+    }
+
+    const unreadCount = await prisma.message.count({
+      where: {
+        chatRoom: {
+          OR: [
+            { buyerId: userId },
+            { sellerId: userId }
+          ]
+        },
+        senderId: {
+          not: userId
+        },
+        read: false
+      }
+    });
+
+    res.status(200).json({ unreadCount });
+  } catch (error: any) {
+    console.error("Erro ao obter contador de não lidas:", error);
+    res.status(200).json({ unreadCount: 0 }); // Fallback seguro de erro conforme as diretrizes do usuário
+  }
+};
+

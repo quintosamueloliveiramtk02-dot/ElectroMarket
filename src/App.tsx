@@ -32,7 +32,8 @@ import {
   X,
   FileText,
   Clock,
-  Loader2
+  Loader2,
+  Bell
 } from 'lucide-react';
 import { User, Product, Chat, Message } from './types';
 import { supabase } from './lib/supabaseClient';
@@ -1611,6 +1612,7 @@ export default function App() {
   // Supabase Google Auth and local login integration
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
 
   // Sincroniza informações do Google Auth com o banco principal via Prisma no Backend
   const syncUserToBackend = async (userObj: User) => {
@@ -1771,6 +1773,31 @@ export default function App() {
     window.history.pushState({}, "", path);
     setCurrentPath(path);
   };
+
+  // Polling silencioso para buscar contador de mensagens não lidas a cada 10s
+  useEffect(() => {
+    if (!currentUser) {
+      setUnreadCount(0);
+      return;
+    }
+
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await api.get<{ unreadCount: number }>('/chats/unread-count');
+        if (res && typeof res.unreadCount === 'number') {
+          setUnreadCount(res.unreadCount);
+        }
+      } catch (err) {
+        console.warn('Erro ao consultar unread-count, silenciado:', err);
+      }
+    };
+
+    // Consulta inicial e configuração de intervalo
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 10000);
+
+    return () => clearInterval(interval);
+  }, [currentUser, currentPath]);
 
   const socketRef = useRef<any>(null);
 
@@ -2550,7 +2577,21 @@ export default function App() {
               </div>
 
               {currentUser ? (
-                <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                <div className="flex items-center gap-2.5 pl-2.5 border-l border-slate-200">
+                  {/* Sino de Notificações */}
+                  <div 
+                    className="p-2 hover:bg-slate-100 rounded-full cursor-pointer relative transition-all duration-150"
+                    title={unreadCount > 0 ? `${unreadCount} novas mensagens` : "Sem novas notificações"}
+                    onClick={() => { navigate("/chat"); }}
+                  >
+                    <Bell className={`w-5 h-5 transition-colors ${unreadCount > 0 ? "text-blue-600 animate-swing" : "text-slate-650 hover:text-slate-900"}`} />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-extrabold w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <img
                       src={currentUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80px&h=80px&q=80'}

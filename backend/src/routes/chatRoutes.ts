@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getOrCreateChat, getUserChats, getChatMessages } from '../controllers/chatController';
+import { getOrCreateChat, getUserChats, getChatMessages, getUnreadCount } from '../controllers/chatController';
 import { authMiddleware } from '../middlewares/authMiddleware';
 import prisma from '../lib/prisma';
 import jwt from 'jsonwebtoken';
@@ -9,6 +9,7 @@ const router = Router();
 // Todas as rotas de chat requerem que o usuário esteja devidamente autenticado
 router.post('/', authMiddleware, getOrCreateChat);
 router.get('/', authMiddleware, getUserChats);
+router.get('/unread-count', authMiddleware, getUnreadCount);
 router.get('/:id/messages', authMiddleware, getChatMessages);
 
 // 1. POST /api/chats/rooms -> Cria ou busca uma sala existente com base no productId e buyerId
