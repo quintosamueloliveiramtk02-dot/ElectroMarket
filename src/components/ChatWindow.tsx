@@ -98,7 +98,8 @@ export default function ChatWindow({
 
   // Helper to obtain the last message in a chat
   const getLastMessage = (chatRoomId: string): Message | null => {
-    const chatMsgs = messages.filter(m => (m.chatRoomId || m.chatId) === chatRoomId);
+    const safeMessages = Array.isArray(messages) ? messages : [];
+    const chatMsgs = safeMessages.filter(m => m && (m.chatRoomId || m.chatId) === chatRoomId);
     if (chatMsgs.length === 0) return null;
     return chatMsgs[chatMsgs.length - 1];
   };
@@ -335,8 +336,8 @@ export default function ChatWindow({
                 </div>
 
                 {/* Message display listing */}
-                {messages
-                  .filter(m => (m.chatRoomId || m.chatId) === (activeChat.chatRoomId || activeChat.id))
+                {(Array.isArray(messages) ? messages : [])
+                  .filter(m => m && (m.chatRoomId || m.chatId) === (activeChat.chatRoomId || activeChat.id))
                   .map((msg, index) => {
                     const isMe = msg.senderId === (currentUser ? currentUser.id : "user-buyer-1");
                     

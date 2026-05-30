@@ -1851,23 +1851,39 @@ export default function App() {
     const fetchMessages = async () => {
       try {
         // Consome a rota real unificada do banco: GET /api/chats/rooms/:roomId/messages
-        const fetchedMsgs = await api.get<any[]>(`/chats/rooms/${activeChatId}/messages`);
-        if (Array.isArray(fetchedMsgs)) {
-          const mappedMsgs = fetchedMsgs.map(m => ({
-            ...m,
-            chatId: m.chatRoomId || m.chatId,
-            chatRoomId: m.chatRoomId || m.chatId
-          }));
-          setMessages(prev => {
-            // Mantém na tela no momento do polling as mensagens que falharam em salvar no banco ou são locais/offline provisórias
-            const unsavedMsgsOfActiveChat = prev.filter(m => 
-              (m.chatId || (m as any).chatRoomId) === activeChatId && 
-              ((m as any).isError || (m as any).isUnsaved || m.id.startsWith('msg-temp') || m.id.startsWith('msg-offline') || m.id.startsWith('msg-saved-local'))
-            );
-            const others = prev.filter(m => (m.chatId || (m as any).chatRoomId) !== activeChatId);
-            return [...others, ...mappedMsgs, ...unsavedMsgsOfActiveChat];
-          });
+        const fetchedMsgs = await api.get<any>(`/chats/rooms/${activeChatId}/messages`);
+        
+        let messagesArray: any[] = [];
+        if (fetchedMsgs) {
+          if (Array.isArray(fetchedMsgs)) {
+            messagesArray = fetchedMsgs;
+          } else if (typeof fetchedMsgs === 'object') {
+            if (Array.isArray(fetchedMsgs.messages)) {
+              messagesArray = fetchedMsgs.messages;
+            } else if (Array.isArray(fetchedMsgs.data)) {
+              messagesArray = fetchedMsgs.data;
+            } else if (fetchedMsgs.data && Array.isArray(fetchedMsgs.data.messages)) {
+              messagesArray = fetchedMsgs.data.messages;
+            }
+          }
         }
+
+        const mappedMsgs = messagesArray.map(m => ({
+          ...m,
+          chatId: m?.chatRoomId || m?.chatId,
+          chatRoomId: m?.chatRoomId || m?.chatId
+        }));
+
+        setMessages(prev => {
+          const safePrev = Array.isArray(prev) ? prev : [];
+          // Mantém na tela no momento do polling as mensagens que falharam em salvar no banco ou são locais/offline provisórias
+          const unsavedMsgsOfActiveChat = safePrev.filter(m => 
+            m && (m.chatId || (m as any).chatRoomId) === activeChatId && 
+            ((m as any).isError || (m as any).isUnsaved || (m.id && (m.id.startsWith('msg-temp') || m.id.startsWith('msg-offline') || m.id.startsWith('msg-saved-local'))))
+          );
+          const others = safePrev.filter(m => m && (m.chatId || (m as any).chatRoomId) !== activeChatId);
+          return [...others, ...mappedMsgs, ...unsavedMsgsOfActiveChat];
+        });
       } catch (err) {
         console.warn('Falha nas mensagens do banco:', err);
       }
@@ -3493,9 +3509,11 @@ export default function App() {
               {/* Message Box */}
               <div className="flex-grow p-4 overflow-y-auto space-y-4 bg-white min-h-0 animate-in fade-in duration-200">
                 {activeChatId ? (
-                  messages.filter(m => m.chatId === activeChatId).map(msg => {
-                    const isMe = msg.senderId === (currentUser ? currentUser.id : "user-buyer-1"); // My profile (Carol Santos)
-                    const senderObj = users.find(u => u.id === msg.senderId);
+                  (Array.isArray(messages) ? messages : [])
+                    .filter(m => m && m.chatId === activeChatId)
+                    .map(msg => {
+                      const isMe = msg.senderId === (currentUser ? currentUser.id : "user-buyer-1"); // My profile (Carol Santos)
+                      const senderObj = users.find(u => u.id === msg.senderId);
                     return (
                       <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[85%] rounded-paragraph p-3.5 text-xs shadow-sm ${

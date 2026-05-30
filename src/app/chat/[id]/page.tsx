@@ -152,8 +152,24 @@ export default function ChatDetailPage() {
     const fetchHistory = async (isInitial = false) => {
       try {
         if (isInitial) setLoadingMessages(true);
-        const data = await api.get<MessageWithSender[]>(`/chats/rooms/${chatId}/messages`);
-        setMessages(data);
+        const data = await api.get<any>(`/chats/rooms/${chatId}/messages`);
+        
+        let messagesArray: MessageWithSender[] = [];
+        if (data) {
+          if (Array.isArray(data)) {
+            messagesArray = data;
+          } else if (typeof data === 'object') {
+            if (Array.isArray(data.messages)) {
+              messagesArray = data.messages;
+            } else if (Array.isArray(data.data)) {
+              messagesArray = data.data;
+            } else if (data.data && Array.isArray(data.data.messages)) {
+              messagesArray = data.data.messages;
+            }
+          }
+        }
+        
+        setMessages(messagesArray);
         if (isInitial) scrollToBottom();
       } catch (err) {
         console.error('Erro ao carregar histórico de mensagens via HTTP:', err);
@@ -465,7 +481,7 @@ export default function ChatDetailPage() {
                 <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                 <p className="text-[11px] text-slate-400 font-medium font-sans uppercase tracking-wider">Carregando histórico do chat...</p>
               </div>
-            ) : messages.length === 0 ? (
+            ) : (!Array.isArray(messages) || messages.length === 0) ? (
               <div className="flex-grow flex flex-col justify-center items-center text-center p-10 max-w-sm mx-auto space-y-3">
                 <div className="bg-blue-50 p-3 rounded-full text-blue-600 border border-blue-100 shadow-xs">
                   <MessageSquare className="w-6 h-6 animate-pulse" />
@@ -476,7 +492,7 @@ export default function ChatDetailPage() {
                 </p>
               </div>
             ) : (
-              messages.map((msg) => {
+              (Array.isArray(messages) ? messages : []).map((msg) => {
                 const isMyMessage = user && msg.senderId === user.id;
                 const timeStr = new Date(msg.createdAt).toLocaleTimeString('pt-BR', {
                   hour: '2-digit',
