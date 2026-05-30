@@ -177,6 +177,7 @@ router.get('/rooms/:userId', async (req: Request, res: Response): Promise<any> =
 
     return res.status(200).json(mappedChats);
   } catch (error: any) {
+    console.error("Erro no Prisma ao listar salas de chat do usuário:", error);
     return res.status(500).json({
       error: 'Erro ao listar salas de chat do usuário',
       details: error.message
@@ -240,6 +241,7 @@ const createMessageFn = async (req: Request, res: Response): Promise<any> => {
 
     return res.status(201).json(messageWithChatId);
   } catch (error: any) {
+    console.error("Erro no Prisma ao criar mensagem:", error);
     return res.status(500).json({
       error: 'Erro ao persistir nova mensagem de chat',
       details: error.message
@@ -281,6 +283,7 @@ router.get('/rooms/:roomId/messages', async (req: Request, res: Response): Promi
 
     return res.status(200).json(mappedMessages);
   } catch (error: any) {
+    console.error("Erro no Prisma ao retornar histórico de mensagens:", error);
     return res.status(500).json({
       error: 'Erro ao retornar histórico de mensagens',
       details: error.message
