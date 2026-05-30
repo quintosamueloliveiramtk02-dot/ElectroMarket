@@ -363,7 +363,13 @@ export default function ChatWindow({
                               {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </span>
                             {isMe && (
-                              <CheckCheck className="w-3.5 h-3.5 text-blue-100 fill-transparent shrink-0" />
+                              (msg as any).isError ? (
+                                <span className="text-red-300 font-sans font-bold flex items-center gap-0.5 shrink-0" title="Erro ao salvar no banco (mantida offline)">
+                                  ⚠️ Erro
+                                </span>
+                              ) : (
+                                <CheckCheck className="w-3.5 h-3.5 text-blue-100 fill-transparent shrink-0" />
+                              )
                             )}
                           </div>
                         </div>

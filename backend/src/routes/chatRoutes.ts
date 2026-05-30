@@ -183,11 +183,12 @@ router.get('/rooms/:userId', async (req: Request, res: Response): Promise<any> =
   }
 });
 
-// 3. POST /api/chats/messages -> Salva uma mensagem real no banco de dados
-router.post('/messages', async (req: Request, res: Response): Promise<any> => {
+// 3. POST /api/chats/messages / /api/chats/rooms/messages / /api/chats/rooms/:roomId/messages -> Salva uma mensagem real no banco de dados
+const createMessageFn = async (req: Request, res: Response): Promise<any> => {
   try {
     const { roomId, chatRoomId, senderId, text } = req.body;
-    const targetRoomId = chatRoomId || roomId;
+    const { roomId: paramRoomId } = req.params;
+    const targetRoomId = chatRoomId || roomId || paramRoomId;
 
     if (!targetRoomId || !senderId || !text) {
       return res.status(400).json({ error: 'Os campos roomId/chatRoomId, senderId e text são obrigatórios.' });
@@ -222,7 +223,11 @@ router.post('/messages', async (req: Request, res: Response): Promise<any> => {
       details: error.message
     });
   }
-});
+};
+
+router.post('/messages', createMessageFn);
+router.post('/rooms/messages', createMessageFn);
+router.post('/rooms/:roomId/messages', createMessageFn);
 
 // 4. GET /api/chats/rooms/:roomId/messages -> Retorna o histórico de mensagens de uma sala
 router.get('/rooms/:roomId/messages', async (req: Request, res: Response): Promise<any> => {

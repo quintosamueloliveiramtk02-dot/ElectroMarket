@@ -1859,8 +1859,13 @@ export default function App() {
             chatRoomId: m.chatRoomId || m.chatId
           }));
           setMessages(prev => {
+            // Mantém na tela no momento do polling as mensagens que falharam em salvar no banco ou são locais/offline provisórias
+            const unsavedMsgsOfActiveChat = prev.filter(m => 
+              (m.chatId || (m as any).chatRoomId) === activeChatId && 
+              ((m as any).isError || (m as any).isUnsaved || m.id.startsWith('msg-temp') || m.id.startsWith('msg-offline') || m.id.startsWith('msg-saved-local'))
+            );
             const others = prev.filter(m => (m.chatId || (m as any).chatRoomId) !== activeChatId);
-            return [...others, ...mappedMsgs];
+            return [...others, ...mappedMsgs, ...unsavedMsgsOfActiveChat];
           });
         }
       } catch (err) {
@@ -1976,29 +1981,33 @@ export default function App() {
         socketRef.current.emit('send_message', mappedMsg);
       }
     } catch (err) {
-      console.warn('[API] Erro ao salvar mensagem via HTTP POST, revertendo temporária e disparando via Socket.io:', err);
-      setMessages(prev => prev.filter(m => m.id !== tempId));
+      console.warn('[API] Erro ao salvar mensagem via HTTP POST, mantendo offline na tela:', err);
+      
+      const permanentLocalId = `msg-saved-local-${Date.now()}`;
+      
+      // Converte a mensagem otimista temporária em uma mensagem offline permanente (isError + isUnsaved) para que o polling não a apague
+      setMessages(prev => 
+        prev.map(m => m.id === tempId ? { ...m, id: permanentLocalId, isError: true, isUnsaved: true } : m)
+      );
+
+      // Exibe de forma visível e explícita o log e o alerta ao usuário
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[CHAT API ERROR] Falha ao persistir mensagem no banco de dados principal: ${errorMsg}`);
+      alert(`Servidor Indisponível (404/Erro): Não foi possível gravar a mensagem no banco de dados. A mensagem foi mantida na tela como offline.`);
 
       const socketPayload = {
+        id: permanentLocalId,
         chatId: chatRoomIdToUse,
         chatRoomId: chatRoomIdToUse,
         senderId: senderId,
         text: text,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        isError: true,
+        isUnsaved: true
       };
 
       if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit('send_message', socketPayload);
-      } else {
-        const offlineMsg: Message = {
-          id: `msg-${Date.now()}`,
-          chatId: chatRoomIdToUse,
-          chatRoomId: chatRoomIdToUse,
-          senderId: senderId,
-          text: text,
-          createdAt: new Date().toISOString()
-        };
-        setMessages(prev => [...prev, offlineMsg]);
       }
     }
   };
