@@ -78,7 +78,10 @@ export default function ChatSidebar() {
           return (
             <div
               key={chat.id}
-              onClick={() => router.push(`/chat/${chat.id}`)}
+              onClick={() => {
+                console.log("Sidebar click, navigating to:", `/chat/${chat.id}`);
+                router.push(`/chat/${chat.id}`);
+              }}
               className="p-4 hover:bg-slate-50 cursor-pointer"
             >
               <div className="flex items-center gap-3">
