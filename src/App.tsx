@@ -2187,6 +2187,12 @@ export default function App() {
     imagePreset: "https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht"
   });
   const [selectedImageFiles, setSelectedImageFiles] = useState<File[]>([]);
+  const [adDraft, setAdDraft] = useState<{
+    newAd: typeof newAd;
+    selectedImageFiles: File[];
+    adCity: string;
+    adUf: string;
+  } | null>(null);
 
   // Edit Ad form state
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
@@ -2209,6 +2215,101 @@ export default function App() {
   const [adUf, setAdUf] = useState("SP");
   const [editAdCity, setEditAdCity] = useState("São Paulo");
   const [editAdUf, setEditAdUf] = useState("SP");
+
+  // Publicar automaticamente o rascunho de anúncio assim que o usuário se autenticar
+  useEffect(() => {
+    if (currentUser && adDraft) {
+      const handlePublishDraft = async () => {
+        const draft = adDraft;
+        // Limpar o rascunho imediatamente antes do processamento para evitar re-entradas/duplicações.
+        setAdDraft(null);
+
+        if (!draft.newAd.title || !draft.newAd.price || !draft.newAd.model) {
+          alert("Alguns campos obrigatórios do seu rascunho estão em branco.");
+          return;
+        }
+
+        const priceNum = parseFloat(draft.newAd.price);
+        if (isNaN(priceNum)) {
+          alert("O preço inserido no seu rascunho é inválido.");
+          return;
+        }
+
+        if (draft.selectedImageFiles.length === 0) {
+          alert("É necessário ter pelo menos uma imagem para publicar o anúncio.");
+          return;
+        }
+
+        const loggedInUserId = currentUser.id;
+        let realProduct: Product | null = null;
+        try {
+          const formData = new FormData();
+          formData.append('title', draft.newAd.title);
+          formData.append('description', draft.newAd.description || "Nenhuma descrição fornecida.");
+          formData.append('price', priceNum.toString());
+          formData.append('brand', draft.newAd.brand);
+          formData.append('model', draft.newAd.model);
+          if (draft.newAd.batteryHealth) formData.append('batteryHealth', draft.newAd.batteryHealth);
+          if (draft.newAd.storage) formData.append('storage', draft.newAd.storage);
+          formData.append('location', `${draft.adCity}, ${draft.adUf}`);
+          formData.append('isFeatured', draft.newAd.isFeatured ? 'true' : 'false');
+          formData.append('userId', loggedInUserId);
+          
+          draft.selectedImageFiles.forEach((file: File) => {
+            formData.append('images', file);
+          });
+
+          const response = await api.post<{ message: string; ad: Product }>('/ads', formData);
+          if (response && response.ad) {
+            realProduct = response.ad;
+          }
+        } catch (apiErr: any) {
+          console.error("Erro ao publicar anúncio do rascunho na API real:", apiErr);
+          alert(`Aviso: Conexão direta com a API falhou para o seu rascunho (Erro: ${apiErr?.message || apiErr}). O anúncio foi salvo localmente temporariamente.`);
+        }
+
+        const localImageUrls = draft.selectedImageFiles.map((file: File) => URL.createObjectURL(file));
+        const generatedId = realProduct ? realProduct.id : `prod-custom-${Date.now()}`;
+        const newProductRecord: Product = realProduct || {
+          id: generatedId,
+          userId: loggedInUserId,
+          title: draft.newAd.title,
+          description: draft.newAd.description || "Nenhuma descrição fornecida.",
+          price: priceNum,
+          brand: draft.newAd.brand,
+          model: draft.newAd.model,
+          batteryHealth: draft.newAd.batteryHealth ? parseInt(draft.newAd.batteryHealth) : undefined,
+          storage: draft.newAd.storage,
+          images: localImageUrls,
+          location: `${draft.adCity}, ${draft.adUf}`,
+          isFeatured: draft.newAd.isFeatured,
+          createdAt: new Date().toISOString()
+        };
+
+        setProducts(prevProducts => [newProductRecord, ...prevProducts]);
+        alert("Anúncio criado com sucesso a partir do seu rascunho!");
+
+        // Auto reset form and state
+        setSelectedImageFiles([]);
+        setAdCity("São Paulo");
+        setAdUf("SP");
+        setNewAd({
+          title: "",
+          description: "",
+          price: "",
+          brand: "Apple",
+          model: "",
+          batteryHealth: "90",
+          storage: "128GB",
+          location: "São Paulo, SP",
+          isFeatured: false,
+          imagePreset: "https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht"
+        });
+      };
+
+      handlePublishDraft();
+    }
+  }, [currentUser, adDraft]);
 
   const handleDeleteAd = async (adId: string, event: React.MouseEvent) => {
     event.stopPropagation(); // Evita que clique no botão abra os detalhes do produto
@@ -2416,6 +2517,14 @@ export default function App() {
   const handleCreateAd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
+      // Salvar Rascunho completo no estado temporário antes do login/cadastro
+      setAdDraft({
+        newAd,
+        selectedImageFiles,
+        adCity,
+        adUf
+      });
+
       setIsLoginMode(false);
       setShowAnnounceModal(false);
       setShowLoginModal(true);
