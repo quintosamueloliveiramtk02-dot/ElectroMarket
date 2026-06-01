@@ -48,6 +48,7 @@ export default function ChatDetailPage() {
       try {
         setLoadingChats(true);
         const data = await api.get<any[]>('/chats');
+        console.log("DEBUG PAGE - Lista completa de chats:", data);
         setChats(data);
       } catch (err) {
         console.error(err);

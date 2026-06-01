@@ -38,6 +38,7 @@ const getAvatarColor = (identifier: string) => {
 export default function ChatSidebar() {
   const router = useRouter();
   const pathname = usePathname();
+  const currentChatId = pathname.split('/').pop();
   const { user } = useAuth();
   const [chats, setChats] = useState<ChatListItem[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
@@ -73,16 +74,17 @@ export default function ChatSidebar() {
       </div>
       <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
         {loadingChats ? (
-            <div className="p-8 text-center text-xs text-slate-400">Carregando...</div>
+            <div className="p-4 text-center text-xs text-slate-400">Carregando...</div>
         ) : chats.map((chat) => {
           const other = getOtherParticipant(chat);
-          const isActive = pathname === `/chat/${chat.id}`;
+          console.log("DEBUG SIDEBAR - ID da URL:", currentChatId, "| ID do objeto chat:", chat.id, "| ChatRoomId:", chat.chatRoomId);
+          const isActive = String(currentChatId) === String(chat.id || chat.chatRoomId);
           return (
             <div
               key={chat.id}
               onClick={(e) => {
                 e.stopPropagation();
-                const targetId = chat.id;
+                const targetId = chat.id || chat.chatRoomId;
                 if (targetId) {
                   window.location.href = `/chat/${targetId}`;
                 } else {
