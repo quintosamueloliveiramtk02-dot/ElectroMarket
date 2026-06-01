@@ -14,6 +14,37 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { User, Product, Chat, Message } from "../types";
 
+const getInitials = (name: string) => {
+  if (!name) return 'U';
+  return name.trim().charAt(0).toUpperCase();
+};
+
+const getAvatarColor = (email: string) => {
+  if (!email) return 'bg-blue-600';
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) {
+    hash = email.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colors = [
+    'bg-red-500',
+    'bg-orange-500',
+    'bg-amber-500',
+    'bg-emerald-500',
+    'bg-teal-500',
+    'bg-cyan-500',
+    'bg-sky-500',
+    'bg-blue-500',
+    'bg-indigo-505',
+    'bg-violet-500',
+    'bg-purple-500',
+    'bg-fuchsia-500',
+    'bg-pink-500',
+    'bg-rose-500',
+  ];
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
+
 interface ChatWindowProps {
   currentUser: User | null;
   chats: Chat[];
@@ -77,6 +108,8 @@ export default function ChatWindow({
       createdAt: ""
     };
   };
+
+  const activePartner = activeChat ? getChatPartner(activeChat) : null;
 
   // Helper to find the product associated with a chat
   const getChatProduct = (chat: Chat): Product => {
@@ -200,11 +233,19 @@ export default function ChatWindow({
 
                   {/* Partner Avatar */}
                   <div className="relative shrink-0">
-                    <img 
-                      src={partner.avatarUrl || defaultAvatar} 
-                      alt={partner.name}
-                      className="w-11 h-11 rounded-full object-cover border border-slate-205 shadow-sm"
-                    />
+                    {!partner.avatarUrl || partner.avatarUrl.includes('images.unsplash.com/photo-1535713875002-d1d0cf377fde') ? (
+                      <div 
+                        className={`w-11 h-11 rounded-full border border-slate-205 flex items-center justify-center text-white text-base font-extrabold shadow-sm shrink-0 ${getAvatarColor(partner.email)}`}
+                      >
+                        {getInitials(partner.name)}
+                      </div>
+                    ) : (
+                      <img 
+                        src={partner.avatarUrl} 
+                        alt={partner.name}
+                        className="w-11 h-11 rounded-full object-cover border border-slate-205 shadow-sm"
+                      />
+                    )}
                     {/* Device Miniature overlay flag badge */}
                     <div className="absolute -bottom-1 -right-1 bg-white border border-slate-200 rounded p-0.5 shadow-sm">
                       <img 
@@ -275,18 +316,26 @@ export default function ChatWindow({
                     <ChevronLeft className="w-5 h-5" />
                   </button>
 
-                  <img 
-                    src={getChatPartner(activeChat).avatarUrl || defaultAvatar}
-                    alt={getChatPartner(activeChat).name}
-                    className="w-10 h-10 rounded-full object-cover border border-slate-200"
-                  />
+                  {activePartner && (!activePartner.avatarUrl || activePartner.avatarUrl.includes('images.unsplash.com/photo-1535713875002-d1d0cf377fde')) ? (
+                    <div 
+                      className={`w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center text-white text-sm font-extrabold shrink-0 ${getAvatarColor(activePartner.email)}`}
+                    >
+                      {getInitials(activePartner.name)}
+                    </div>
+                  ) : (
+                    <img 
+                      src={activePartner?.avatarUrl || defaultAvatar}
+                      alt={activePartner?.name}
+                      className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                    />
+                  )}
                   <div>
                     <h3 className="font-title font-bold text-sm text-slate-900 leading-tight">
-                      {getChatPartner(activeChat).name}
+                      {activePartner?.name}
                     </h3>
                     <div className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
                       <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                      <span>{getChatPartner(activeChat).phone || "(11) 98765-4321"}</span>
+                      <span>{activePartner?.phone || "(11) 98765-4321"}</span>
                     </div>
                   </div>
                 </div>

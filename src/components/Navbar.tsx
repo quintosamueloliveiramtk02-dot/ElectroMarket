@@ -2,6 +2,37 @@ import React, { useState } from 'react';
 import { Search, PlusCircle, LogIn, User as UserIcon, LogOut, Flame } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
+const getInitials = (name: string) => {
+  if (!name) return 'U';
+  return name.trim().charAt(0).toUpperCase();
+};
+
+const getAvatarColor = (email: string) => {
+  if (!email) return 'bg-blue-600';
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) {
+    hash = email.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colors = [
+    'bg-red-500',
+    'bg-orange-500',
+    'bg-amber-500',
+    'bg-emerald-500',
+    'bg-teal-500',
+    'bg-cyan-500',
+    'bg-sky-500',
+    'bg-blue-500',
+    'bg-indigo-500',
+    'bg-violet-500',
+    'bg-purple-500',
+    'bg-fuchsia-500',
+    'bg-pink-500',
+    'bg-rose-500',
+  ];
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
+
 interface NavbarProps {
   searchQuery?: string;
   setSearchQuery?: (query: string) => void;
@@ -71,12 +102,20 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                 <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
                   <div className="flex items-center gap-2 group cursor-pointer">
-                    <img
-                      src={user.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80px&h=80px&q=80'}
-                      alt={user.name}
-                      referrerPolicy="no-referrer"
-                      className="w-8 h-8 rounded-full border border-slate-200 object-cover"
-                    />
+                    {!user.avatarUrl || user.avatarUrl.includes('images.unsplash.com/photo-1535713875002-d1d0cf377fde') ? (
+                      <div 
+                        className={`w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-white text-xs font-bold shrink-0 ${getAvatarColor(user.email)}`}
+                      >
+                        {getInitials(user.name)}
+                      </div>
+                    ) : (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.name}
+                        referrerPolicy="no-referrer"
+                        className="w-8 h-8 rounded-full border border-slate-200 object-cover"
+                      />
+                    )}
                     <div className="hidden lg:block text-left">
                       <p className="text-xs font-semibold text-slate-800 leading-tight block max-w-[120px] truncate">
                         {user.name}

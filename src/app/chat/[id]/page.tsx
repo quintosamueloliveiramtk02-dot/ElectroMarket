@@ -27,7 +27,39 @@ interface ChatUser {
   name: string;
   avatarUrl: string;
   phone?: string;
+  email?: string;
 }
+
+const getInitials = (name: string) => {
+  if (!name) return 'U';
+  return name.trim().charAt(0).toUpperCase();
+};
+
+const getAvatarColor = (identifier: string) => {
+  if (!identifier) return 'bg-blue-600';
+  let hash = 0;
+  for (let i = 0; i < identifier.length; i++) {
+    hash = identifier.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colors = [
+    'bg-red-500',
+    'bg-orange-500',
+    'bg-amber-500',
+    'bg-emerald-500',
+    'bg-teal-500',
+    'bg-cyan-500',
+    'bg-sky-500',
+    'bg-blue-500',
+    'bg-indigo-505',
+    'bg-violet-500',
+    'bg-purple-500',
+    'bg-fuchsia-500',
+    'bg-pink-500',
+    'bg-rose-500',
+  ];
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
 
 interface ChatProduct {
   id: string;
@@ -378,12 +410,20 @@ export default function ChatDetailPage() {
                         : 'bg-white hover:bg-slate-50'
                     }`}
                   >
-                    <img
-                      src={other?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=48&h=48&q=80'}
-                      alt={other?.name}
-                      referrerPolicy="no-referrer"
-                      className="w-10 h-10 rounded-full object-cover border border-slate-150 shrink-0"
-                    />
+                    {!other?.avatarUrl || other.avatarUrl.includes('images.unsplash.com/photo-1535713875002-d1d0cf377fde') ? (
+                      <div 
+                        className={`w-10 h-10 rounded-full border border-slate-150 flex items-center justify-center text-white text-xs font-bold shrink-0 ${getAvatarColor((other as any)?.email || other?.name || '')}`}
+                      >
+                        {getInitials(other?.name || '')}
+                      </div>
+                    ) : (
+                      <img
+                        src={other.avatarUrl}
+                        alt={other.name}
+                        referrerPolicy="no-referrer"
+                        className="w-10 h-10 rounded-full object-cover border border-slate-150 shrink-0"
+                      />
+                    )}
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
@@ -427,12 +467,20 @@ export default function ChatDetailPage() {
                 <ChevronLeft className="w-5 h-5" />
               </button>
 
-              <img
-                src={otherUser?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=64&h=64&q=80'}
-                alt={otherUser?.name}
-                referrerPolicy="no-referrer"
-                className="w-10 h-10 rounded-full object-cover border border-slate-150 shrink-0"
-              />
+              {!otherUser?.avatarUrl || otherUser.avatarUrl.includes('images.unsplash.com/photo-1535713875002-d1d0cf377fde') ? (
+                <div 
+                  className={`w-10 h-10 rounded-full border border-slate-150 flex items-center justify-center text-white text-xs font-bold shrink-0 ${getAvatarColor((otherUser as any)?.email || otherUser?.name || '')}`}
+                >
+                  {getInitials(otherUser?.name || '')}
+                </div>
+              ) : (
+                <img
+                  src={otherUser.avatarUrl}
+                  alt={otherUser.name}
+                  referrerPolicy="no-referrer"
+                  className="w-10 h-10 rounded-full object-cover border border-slate-150 shrink-0"
+                />
+              )}
 
               <div className="min-w-0">
                 <span className="text-xs font-black text-slate-900 block leading-tight">{otherUser?.name || 'Vendedor ElectroMarket'}</span>

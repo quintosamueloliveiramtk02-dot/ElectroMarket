@@ -47,6 +47,37 @@ const BRAZIL_STATES = [
   "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"
 ];
 
+const getInitials = (name: string) => {
+  if (!name) return 'U';
+  return name.trim().charAt(0).toUpperCase();
+};
+
+const getAvatarColor = (email: string) => {
+  if (!email) return 'bg-blue-600';
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) {
+    hash = email.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colors = [
+    'bg-red-500',
+    'bg-orange-500',
+    'bg-amber-500',
+    'bg-emerald-500',
+    'bg-teal-500',
+    'bg-cyan-500',
+    'bg-sky-500',
+    'bg-blue-500',
+    'bg-indigo-505',
+    'bg-violet-500',
+    'bg-purple-500',
+    'bg-fuchsia-500',
+    'bg-pink-500',
+    'bg-rose-500',
+  ];
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
+
 // Let's create the hardcoded database code representations to display & copy easily.
 const SCHEMA_PRISMA_CODE = `datasource db {
   provider = "postgresql"
@@ -2754,14 +2785,24 @@ export default function App() {
                   </div>
 
                   <div className="flex items-center gap-2 pl-2.5 border-l border-slate-200">
-                    <img
-                      src={currentUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80px&h=80px&q=80'}
-                      alt={currentUser.name}
-                      referrerPolicy="no-referrer"
-                      onClick={() => navigate("/profile")}
-                      className="w-8 h-8 rounded-full border border-slate-200 object-cover cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all"
-                      title="Ver seu perfil"
-                    />
+                    {!currentUser.avatarUrl || currentUser.avatarUrl.includes('images.unsplash.com/photo-1535713875002-d1d0cf377fde') ? (
+                      <div 
+                        onClick={() => navigate("/profile")}
+                        className={`w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-white text-xs font-bold cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all shrink-0 ${getAvatarColor(currentUser.email)}`}
+                        title="Ver seu perfil"
+                      >
+                        {getInitials(currentUser.name)}
+                      </div>
+                    ) : (
+                      <img
+                        src={currentUser.avatarUrl}
+                        alt={currentUser.name}
+                        referrerPolicy="no-referrer"
+                        onClick={() => navigate("/profile")}
+                        className="w-8 h-8 rounded-full border border-slate-200 object-cover cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all"
+                        title="Ver seu perfil"
+                      />
+                    )}
                     <div className="hidden lg:block text-left max-w-[125px]">
                       <p 
                         onClick={() => navigate("/profile")}
