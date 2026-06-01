@@ -3066,6 +3066,7 @@ export default function App() {
                     <option value="Xiaomi">Xiaomi</option>
                     <option value="Google">Google</option>
                     <option value="Motorola">Motorola</option>
+                    <option value="Outros">Outros</option>
                   </select>
                 </div>
                 <div>
@@ -3328,6 +3329,7 @@ export default function App() {
                     <option value="Xiaomi">Xiaomi</option>
                     <option value="Google">Google</option>
                     <option value="Motorola">Motorola</option>
+                    <option value="Outros">Outros</option>
                   </select>
                 </div>
                 <div>
