@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
+import { supabase } from '../../../lib/supabaseClient';
 import { api } from '../../../lib/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import Navbar from '../../../components/Navbar';
@@ -265,6 +266,65 @@ export default function ChatDetailPage() {
 
     return () => {
       socket.off('receive_message', handleReceiveMessage);
+    };
+  }, [chatId]);
+
+  // Escuta em tempo real do Supabase v2 para Message
+  useEffect(() => {
+    if (!chatId) return;
+
+    console.log("Iniciando escuta em tempo real para a sala:", chatId);
+
+    const channel = supabase
+      .channel(`room_messages_${chatId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'Message',
+          filter: `chatRoomId=eq.${chatId}`
+        },
+        (payload) => {
+          console.log("Nova mensagem recebida via Realtime:", payload);
+          const newMessage = payload.new as any;
+
+          // Atualiza o estado garantindo que não vamos duplicar
+          setMessages((prev) => {
+            const safePrev = Array.isArray(prev) ? prev : [];
+            if (safePrev.some(msg => msg.id === newMessage.id)) return safePrev;
+            
+            const formattedMsg = {
+              ...newMessage,
+              chatId: newMessage.chatRoomId || newMessage.chatId,
+              chatRoomId: newMessage.chatRoomId || newMessage.chatId
+            };
+            return [...safePrev, formattedMsg];
+          });
+
+          // Atualizar o preview do último chat na barra lateral
+          setChats((prevChats) => {
+            return prevChats.map((chat) => {
+              if (chat.id === newMessage.chatRoomId || chat.id === newMessage.chatId) {
+                return {
+                  ...chat,
+                  messages: [{ id: newMessage.id, text: newMessage.text, createdAt: newMessage.createdAt }]
+                };
+              }
+              return chat;
+            });
+          });
+          
+          scrollToBottom();
+        }
+      )
+      .subscribe((status) => {
+        console.log("Status da assinatura Realtime:", status);
+      });
+
+    return () => {
+      console.log("Limpando canal da sala:", chatId);
+      supabase.removeChannel(channel);
     };
   }, [chatId]);
 

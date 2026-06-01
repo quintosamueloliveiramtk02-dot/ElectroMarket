@@ -2061,6 +2061,64 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeChatId, currentUser]);
 
+  // Escuta em tempo real do Supabase v2 para Message
+  useEffect(() => {
+    if (!activeChatId) return;
+
+    console.log("Iniciando escuta em tempo real para a sala (SPA):", activeChatId);
+
+    const channel = supabase
+      .channel(`room_messages_${activeChatId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'Message',
+          filter: `chatRoomId=eq.${activeChatId}`
+        },
+        (payload) => {
+          console.log("Nova mensagem recebida via Realtime (SPA):", payload);
+          const newMessage = payload.new as any;
+
+          // Atualiza o estado garantindo que não vamos duplicar
+          setMessages((prev) => {
+            const safePrev = Array.isArray(prev) ? prev : [];
+            if (safePrev.some(msg => msg.id === newMessage.id)) return safePrev;
+            
+            const formattedMsg = {
+              ...newMessage,
+              chatId: newMessage.chatRoomId || newMessage.chatId,
+              chatRoomId: newMessage.chatRoomId || newMessage.chatId
+            };
+            return [...safePrev, formattedMsg];
+          });
+
+          // Atualizar o preview do último chat na barra lateral
+          setChats((prevChats) => {
+            return prevChats.map((chat) => {
+              const rId = chat.chatRoomId || chat.id;
+              if (rId === newMessage.chatRoomId || rId === newMessage.chatId) {
+                return {
+                  ...chat,
+                  messages: [{ id: newMessage.id, text: newMessage.text, createdAt: newMessage.createdAt }]
+                };
+              }
+              return chat;
+            });
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log("Status da assinatura Realtime (SPA):", status);
+      });
+
+    return () => {
+      console.log("Limpando canal da sala (SPA):", activeChatId);
+      supabase.removeChannel(channel);
+    };
+  }, [activeChatId]);
+
   // Automatic Chat routing & synchronization effect for /chat?productId=XXX
   useEffect(() => {
     if (currentPath.startsWith("/chat")) {
