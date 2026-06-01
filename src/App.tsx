@@ -2335,48 +2335,33 @@ export default function App() {
       return;
     }
 
+    if (selectedImageFiles.length === 0) {
+      alert("Por favor, selecione pelo menos uma foto para o seu anúncio (mínimo de 1 foto).");
+      return;
+    }
+
     // Enviar anúncio real para o backend na Render
     const loggedInUserId = currentUser.id;
     let realProduct: Product | null = null;
     try {
-      let response;
-      if (selectedImageFiles.length > 0) {
-        const formData = new FormData();
-        formData.append('title', newAd.title);
-        formData.append('description', newAd.description || "Nenhuma descrição fornecida.");
-        formData.append('price', priceNum.toString());
-        formData.append('brand', newAd.brand);
-        formData.append('model', newAd.model);
-        if (newAd.batteryHealth) formData.append('batteryHealth', newAd.batteryHealth);
-        if (newAd.storage) formData.append('storage', newAd.storage);
-        formData.append('location', newAd.location);
-        formData.append('isFeatured', newAd.isFeatured ? 'true' : 'false');
-        formData.append('userId', loggedInUserId);
-        
-        // Append all selected image files to field "images" (matches upload.array('images', 5) backend middleware)
-        selectedImageFiles.forEach((file) => {
-          formData.append('images', file);
-        });
-
-        response = await api.post<{ message: string; ad: Product }>('/ads', formData);
-      } else {
-        const payloadJson = {
-          title: newAd.title,
-          description: newAd.description || "Nenhuma descrição fornecida.",
-          price: priceNum,
-          brand: newAd.brand,
-          model: newAd.model,
-          batteryHealth: newAd.batteryHealth ? parseInt(newAd.batteryHealth) : null,
-          storage: newAd.storage,
-          images: [newAd.imagePreset],
-          location: newAd.location,
-          isFeatured: newAd.isFeatured,
-          userId: loggedInUserId
-        };
-
-        response = await api.post<{ message: string; ad: Product }>('/ads', payloadJson);
-      }
+      const formData = new FormData();
+      formData.append('title', newAd.title);
+      formData.append('description', newAd.description || "Nenhuma descrição fornecida.");
+      formData.append('price', priceNum.toString());
+      formData.append('brand', newAd.brand);
+      formData.append('model', newAd.model);
+      if (newAd.batteryHealth) formData.append('batteryHealth', newAd.batteryHealth);
+      if (newAd.storage) formData.append('storage', newAd.storage);
+      formData.append('location', newAd.location);
+      formData.append('isFeatured', newAd.isFeatured ? 'true' : 'false');
+      formData.append('userId', loggedInUserId);
       
+      // Append all selected image files to field "images" (matches upload.array('images', 5) backend middleware)
+      selectedImageFiles.forEach((file) => {
+        formData.append('images', file);
+      });
+
+      const response = await api.post<{ message: string; ad: Product }>('/ads', formData);
       if (response && response.ad) {
         realProduct = response.ad;
       }
@@ -2386,9 +2371,7 @@ export default function App() {
       alert(`Aviso: Conexão direta com a API falhou (Erro: ${apiErr?.message || apiErr}). O anúncio foi salvo localmente temporariamente.`);
     }
 
-    const localImageUrls = selectedImageFiles.length > 0
-      ? selectedImageFiles.map(file => URL.createObjectURL(file))
-      : [newAd.imagePreset];
+    const localImageUrls = selectedImageFiles.map(file => URL.createObjectURL(file));
 
     const generatedId = realProduct ? realProduct.id : `prod-custom-${Date.now()}`;
     const newProductRecord: Product = realProduct || {
@@ -3194,7 +3177,7 @@ export default function App() {
                   <span className="text-[10px] text-slate-400 mt-0.5">Até 5 fotos (JPG, PNG, WEBP)</span>
                 </div>
 
-                {selectedImageFiles.length > 0 ? (
+                {selectedImageFiles.length > 0 && (
                   <div className="mt-3 text-left space-y-1.5">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Arquivos selecionados ({selectedImageFiles.length}):</span>
                     {selectedImageFiles.map((file, idx) => (
@@ -3213,21 +3196,6 @@ export default function App() {
                       <Check className="w-3.5 h-3.5 shrink-0" />
                       <span>Fotos prontas para upload via Cloudinary!</span>
                     </p>
-                  </div>
-                ) : (
-                  <div className="mt-3 text-left border-t border-slate-200 pt-2.5">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 leading-normal">
-                      Ou use Preset como Fallback se preferir não subir arquivos
-                    </label>
-                    <select 
-                      value={newAd.imagePreset}
-                      onChange={(e) => setNewAd({...newAd, imagePreset: e.target.value})}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white outline-none focus:ring-1 focus:ring-[#2563eb]"
-                    >
-                      <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht">iPhone Preset</option>
-                      <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuBp6MX-rQosrE7hr4MRqk76ezQ692T72Fbg6UFynfH3X-Ag96Lf5brEGGzIOeaLHZNXnLQSvthqzUSfMcaL_KDVuvn0O1liA83wfGoJzQmdpdaSjbVa_X9Uj3WOTeaFPO8ecfaB6YgRaHWw_DbNRhxuYf7SPW5zy65EE7aPMtBZFroiQTQq7Vo-LYBR53FP9gxE6ivwc6k-4ZlYEHCx9x5A4ncAUkKcdfi161D-RLdZqYZ2psIj1HMaZRBecdPxoRqHCi1vHe3gmHmJ">Galaxy Preset</option>
-                      <option value="https://lh3.googleusercontent.com/aida-public/AB6AXuDylhGhSPFzQ1UaObLEzMyneaTBT7yjrjigPKCvN_NLxj7aVPW8xVLaaInLW-T9SqjIeLJEIWdbt6r9bqJpEaLqbov-m1cPpfC2R6wyPJ2qui-5AU6GbJ9qMMl1kXBMlX0YC3WFFyqDI5xDiAKIHotAAzUp6bbIqKOpDykPMSnAdYv4fojkmwBtJ_Jlgox61e5aEwG5qmBRlZ-F4olg62J6VD_2JWX250vH08kZBU6sIim6sAru5MTGvwpNNu0KnM7P2N5NSAGUZL2y">Pixel Preset</option>
-                    </select>
                   </div>
                 )}
               </div>
