@@ -1,8 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../lib/api';
 import { Product, User } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
+
+const getInitials = (name: string) => {
+  if (!name) return 'U';
+  return name.trim().charAt(0).toUpperCase();
+};
+
+const getAvatarColor = (email: string) => {
+  if (!email) return 'bg-blue-600';
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) {
+    hash = email.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colors = [
+    'bg-red-500',
+    'bg-orange-500',
+    'bg-amber-500',
+    'bg-emerald-500',
+    'bg-teal-500',
+    'bg-cyan-500',
+    'bg-sky-500',
+    'bg-blue-500',
+    'bg-indigo-500',
+    'bg-violet-500',
+    'bg-purple-500',
+    'bg-fuchsia-500',
+    'bg-pink-500',
+    'bg-rose-500',
+  ];
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
 import ProductCard from '../../components/ProductCard';
 import { 
   User as UserIcon, 
@@ -75,6 +106,56 @@ export default function ProfilePage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+
+  // Avatar Upload States
+  const [isUploading, setIsUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarSuccess, setAvatarSuccess] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploading(true);
+      setAvatarError(null);
+      setAvatarSuccess(null);
+
+      // 1. Enviar para o Cloudinary através da nossa API no Express do backend (proxied)
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const data = await api.post<{ url: string }>('/users/upload', formData);
+      if (!data || !data.url) {
+        throw new Error('Não foi possível obter a URL do arquivo carregado.');
+      }
+
+      const imageUrl = data.url;
+
+      // 2. Persistir no banco de dados local via requisição HTTP
+      const updatedUser = await api.put<User>('/users/me', { avatarUrl: imageUrl });
+
+      // 3. Atualizar estados global e local na hora
+      if (setCurrentUser) {
+        setCurrentUser(updatedUser);
+      }
+
+      // Atualiza também o cache no localStorage
+      localStorage.setItem('electromarket_user', JSON.stringify(updatedUser));
+
+      setAvatarSuccess('Foto de perfil atualizada com sucesso!');
+    } catch (err: any) {
+      console.error('Falha ao subir imagem de perfil:', err);
+      setAvatarError(err?.message || 'Erro ao realizar upload da foto de perfil.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Route Protection: Redirect if user session is initialized and no activeUser exists
   useEffect(() => {
@@ -283,16 +364,48 @@ export default function ProfilePage({
       <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-center md:items-start md:justify-between gap-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-44 h-44 bg-blue-500/5 rounded-full blur-2xl -mr-12 -mt-12 pointer-events-none"></div>
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-          <img
-            src={activeUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120px&h=120px&q=80'}
-            alt={activeUser.name}
-            referrerPolicy="no-referrer"
-            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white shadow-md object-cover ring-4 ring-slate-100"
-          />
-          <div className="text-center sm:text-left space-y-1 mt-2">
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">{activeUser.name}</h2>
+          {/* Avatar com upload e overlay no hover */}
+          <div className="relative group cursor-pointer" onClick={handleAvatarClick} title="Alterar foto de perfil">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              className="hidden"
+            />
             
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-x-4 sm:gap-y-1 text-xs text-slate-500 pt-1 font-medium">
+            {/* O Avatar em si: se placeholder (como os criados por e-mail tradicionais sem imagem customizada), mostra círculo com inicial, senão imagem */}
+            {(!activeUser.avatarUrl || activeUser.avatarUrl.includes('images.unsplash.com/photo-1535713875002-d1d0cf377fde')) ? (
+              <div 
+                className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white shadow-md flex items-center justify-center text-white text-3xl sm:text-4xl font-extrabold ring-4 ring-slate-100 transition-all duration-300 ${getAvatarColor(activeUser.email)}`}
+              >
+                {getInitials(activeUser.name)}
+              </div>
+            ) : (
+              <img
+                src={activeUser.avatarUrl}
+                alt={activeUser.name}
+                referrerPolicy="no-referrer"
+                className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white shadow-md object-cover ring-4 ring-slate-100 transition-all duration-300"
+              />
+            )}
+
+            {/* Overlay sutil escrito 'Alterar foto' */}
+            <div className="absolute inset-0 bg-black/45 rounded-full flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 border-2 border-transparent">
+              {isUploading ? (
+                <Loader2 className="w-5 h-5 text-white animate-spin" />
+              ) : (
+                <span className="text-[10px] text-white font-bold tracking-wider uppercase text-center px-1 leading-none select-none font-sans">
+                  Alterar foto
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="text-center sm:text-left space-y-1 mt-2">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight font-sans">{activeUser.name}</h2>
+            
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-x-4 sm:gap-y-1 text-xs text-slate-500 pt-1 font-medium font-sans">
               <span className="flex items-center justify-center sm:justify-start gap-1.5 bg-slate-50 border border-slate-100/50 px-2.5 py-1 rounded-lg">
                 <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <span className="text-slate-600">{activeUser.email}</span>
@@ -301,6 +414,20 @@ export default function ProfilePage({
                 <span className="flex items-center justify-center sm:justify-start gap-1.5 bg-slate-50 border border-slate-100/50 px-2.5 py-1 rounded-lg">
                   <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <span className="text-slate-600">{activeUser.phone}</span>
+                </span>
+              )}
+              
+              {/* Feedback dinâmico de sucesso/erro no upload de fotos */}
+              {avatarError && (
+                <span className="flex items-center justify-center sm:justify-start gap-1 bg-red-50 text-red-600 border border-red-100 px-2.5 py-1 rounded-lg animate-pulse">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{avatarError}</span>
+                </span>
+              )}
+              {avatarSuccess && (
+                <span className="flex items-center justify-center sm:justify-start gap-1 bg-emerald-50 text-emerald-600 border border-emerald-100 px-2.5 py-1 rounded-lg transition duration-200">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{avatarSuccess}</span>
                 </span>
               )}
             </div>
