@@ -68,8 +68,7 @@ export default function ChatSidebar() {
   };
 
   if (chats && chats.length > 0) {
-    console.log("RAIO-X DO PRIMEIRO CHAT:", JSON.stringify(chats[0], null, 2));
-    console.log("ID DA URL CAPTURADO:", currentChatId);
+    console.log("RAIO-X CHAT NOVO:", JSON.stringify(chats[0], null, 2));
   }
 
   return (
