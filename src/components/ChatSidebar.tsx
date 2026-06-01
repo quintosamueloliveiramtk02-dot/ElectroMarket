@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,6 +37,7 @@ const getAvatarColor = (identifier: string) => {
 
 export default function ChatSidebar() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
   const [chats, setChats] = useState<ChatListItem[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
@@ -75,19 +76,20 @@ export default function ChatSidebar() {
             <div className="p-8 text-center text-xs text-slate-400">Carregando...</div>
         ) : chats.map((chat) => {
           const other = getOtherParticipant(chat);
+          const isActive = pathname === `/chat/${chat.id}`;
           return (
             <div
               key={chat.id}
               onClick={(e) => {
                 e.stopPropagation();
-                const targetId = chat.id || chat.chatRoomId;
+                const targetId = chat.id;
                 if (targetId) {
                   window.location.href = `/chat/${targetId}`;
                 } else {
                   console.error("ID do chat não encontrado:", chat);
                 }
               }}
-              className="p-4 hover:bg-slate-50 cursor-pointer block border-b border-slate-100"
+              className={`p-4 hover:bg-slate-50 cursor-pointer block border-b border-slate-100 ${isActive ? 'bg-blue-50 border-r-4 border-r-blue-600' : ''}`}
             >
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold ${getAvatarColor(other.name)}`}>
