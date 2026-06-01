@@ -1616,6 +1616,7 @@ export default function App() {
   // Supabase Google Auth and local login integration
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+  const [isLoginMode, setIsLoginMode] = useState<boolean>(true);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
   // Estados adicionais para formulário de login por e-mail e senha com Supabase
@@ -1735,10 +1736,17 @@ export default function App() {
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
-        password: loginPassword,
-      });
+      const responseAuth = isLoginMode
+        ? await supabase.auth.signInWithPassword({
+            email: loginEmail,
+            password: loginPassword,
+          })
+        : await supabase.auth.signUp({
+            email: loginEmail,
+            password: loginPassword,
+          });
+
+      const { data, error } = responseAuth;
 
       if (error) {
         if (error.message.includes("Invalid login credentials") || error.message.includes("does not match")) {
@@ -1789,6 +1797,8 @@ export default function App() {
         setShowLoginModal(false);
         setLoginEmail("");
         setLoginPassword("");
+      } else if (!isLoginMode && data && data.user) {
+        setLoginError("Cadastro realizado! Por favor, verifique seu e-mail para confirmar a conta e depois faça login.");
       }
     } catch (err: any) {
       console.error('Erro ao realizar login por e-mail/senha:', err);
@@ -3558,10 +3568,16 @@ export default function App() {
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Lock className="w-5 h-5 text-[#2563eb]" />
-                <h3 className="font-title font-bold text-base">Acesse sua Conta</h3>
+                <h3 className="font-title font-bold text-base">
+                  {isLoginMode ? "Acesse sua Conta" : "Crie sua Conta"}
+                </h3>
               </div>
               <button 
-                onClick={() => setShowLoginModal(false)}
+                onClick={() => {
+                  setShowLoginModal(false);
+                  setIsLoginMode(true);
+                  setLoginError("");
+                }}
                 className="text-slate-400 hover:text-white transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -3575,7 +3591,12 @@ export default function App() {
                   <Flame className="w-6 h-6 fill-blue-600" />
                 </div>
                 <h4 className="font-bold text-slate-800 text-sm">Bem-vindo ao ElectroMarket</h4>
-                <p className="text-xs text-slate-500 mt-1">Conecte-se para gerenciar seus chats e criar anúncios reais.</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {isLoginMode 
+                    ? "Conecte-se para gerenciar seus chats e criar anúncios reais." 
+                    : "Cadastre-se para gerenciar seus chats e criar anúncios reais."
+                  }
+                </p>
               </div>
 
               {/* Real Google Button requested by user */}
@@ -3631,20 +3652,38 @@ export default function App() {
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={loginLoading}
-                  className="w-full bg-[#2563eb] text-white hover:bg-blue-700 font-semibold py-2.5 px-4 rounded-xl text-sm transition shadow-sm cursor-pointer duration-150 active:scale-95 disabled:opacity-75 flex items-center justify-center gap-2"
-                >
-                  {loginLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Entrando...</span>
-                    </>
-                  ) : (
-                    <span>Entrar</span>
-                  )}
-                </button>
+                <div className="flex flex-col gap-3">
+                  <button
+                    type="submit"
+                    disabled={loginLoading}
+                    className="w-full bg-[#2563eb] text-white hover:bg-blue-700 font-semibold py-2.5 px-4 rounded-xl text-sm transition shadow-sm cursor-pointer duration-150 active:scale-95 disabled:opacity-75 flex items-center justify-center gap-2"
+                  >
+                    {loginLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>{isLoginMode ? "Entrando..." : "Criando Conta..."}</span>
+                      </>
+                    ) : (
+                      <span>{isLoginMode ? "Entrar" : "Criar Conta e Publicar Anúncio"}</span>
+                    )}
+                  </button>
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsLoginMode(!isLoginMode);
+                        setLoginError("");
+                      }}
+                      className="text-xs text-[#2563eb] hover:underline font-semibold cursor-pointer"
+                    >
+                      {isLoginMode 
+                        ? "Não tem uma conta? Cadastre-se aqui" 
+                        : "Já possui uma conta? Faça login"
+                      }
+                    </button>
+                  </div>
+                </div>
 
                 {loginError && (
                   <p className="text-xs text-red-500 font-medium text-center bg-red-50 py-1.5 px-3 rounded-lg border border-red-100">
