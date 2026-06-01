@@ -6,7 +6,6 @@ import {
   ChevronRight,
   PlusCircle,
   Search,
-  ShoppingCart,
   User as UserIcon,
   MapPin,
   Flame,
@@ -1814,11 +1813,10 @@ export default function App() {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('[Socket.io] Conector habilitado com sucesso no backend:', socketServer);
+      // Conectado
     });
 
     socket.on('receive_message', (newMsg: any) => {
-      console.log('[Socket.io] Nova mensagem real-time recebida do Postgres:', newMsg);
       const chatRoomId = newMsg.chatRoomId || newMsg.chatId;
       setMessages(prev => {
         if (prev.find(m => m.id === newMsg.id)) return prev;
@@ -1843,15 +1841,19 @@ export default function App() {
   useEffect(() => {
     if (activeChatId && socketRef.current) {
       socketRef.current.emit('join_room', activeChatId);
-      console.log(`[Socket.io] Solicitando entrada no canal privado: ${activeChatId}`);
     }
   }, [activeChatId]);
 
   // Carrega salas de chat reais (ChatRoom) do banco de dados na inicialização/mudança do usuário
   useEffect(() => {
+    if (!currentUser) {
+      setChats([]);
+      return;
+    }
+
     const fetchChats = async () => {
       try {
-        const activeUserId = currentUser ? currentUser.id : "user-buyer-1";
+        const activeUserId = currentUser.id;
         // Consome a rota real unificada do banco: GET /api/chats/rooms/:userId
         const fetchedChats = await api.get<Chat[]>(`/chats/rooms/${activeUserId}`);
         if (Array.isArray(fetchedChats)) {
@@ -1862,12 +1864,12 @@ export default function App() {
           setChats(mappedChats);
         }
       } catch (err) {
-        console.warn('Erro ao buscar canais de chat do backend real:', err);
+        // Silenciado em produção
       }
     };
 
     fetchChats();
-    // Sincronização secundária via polling para máxima robustez em iframes de desenvolvimento
+    // Sincronização secundária via polling para máxima robustez em seções ativas
     const interval = setInterval(fetchChats, 4000);
     return () => clearInterval(interval);
   }, [currentUser]);
@@ -1979,7 +1981,8 @@ export default function App() {
   }, [currentPath, products, currentUser]);
 
   const handleSendDynamicMessage = async (chatRoomIdToUse: string, text: string) => {
-    const senderId = currentUser ? currentUser.id : "user-buyer-1";
+    if (!currentUser) return;
+    const senderId = currentUser.id;
     
     // Cria um objeto de mensagem otimista e atualiza a tela IMEDIATAMENTE para máxima agilidade
     const tempId = `msg-temp-${Date.now()}`;
@@ -2003,8 +2006,6 @@ export default function App() {
         senderId: senderId,
         text: text
       });
-
-      console.log('[API] Mensagem enviada e salva com sucesso no PostgreSQL via HTTP POST:', savedMsg);
 
       const mappedMsg: Message = {
         id: savedMsg.id,
@@ -2298,6 +2299,13 @@ export default function App() {
 
   const handleCreateAd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      alert("Acesso Negado: Você precisa estar logado para cadastrar um smartphone no ElectroMarket.");
+      setShowAnnounceModal(false);
+      setShowLoginModal(true);
+      return;
+    }
+
     if (!newAd.title || !newAd.price || !newAd.model) {
       alert("Por favor preencha os campos obrigatórios (Título, Preço e Modelo).");
       return;
@@ -2309,48 +2317,8 @@ export default function App() {
       return;
     }
 
-    // Fluxo de autenticação automática em plano de fundo no Supabase
-    let token = localStorage.getItem('electromarket_token');
-    if (!token) {
-      try {
-        const authData = await api.post<{ token: string; user: any }>('/auth/login', {
-          email: 'carol.santos@exemplo.com',
-          password: 'password123'
-        });
-        token = authData.token;
-        localStorage.setItem('electromarket_token', authData.token);
-        localStorage.setItem('electromarket_user', JSON.stringify(authData.user));
-      } catch (loginErr) {
-        // Se falhar o login, tenta registrar a Carol Santos
-        try {
-          const authData = await api.post<{ token: string; user: any }>('/auth/register', {
-            name: 'Carol Santos',
-            email: 'carol.santos@exemplo.com',
-            password: 'password123',
-            phone: '(11) 98765-4321',
-            avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'
-          });
-          token = authData.token;
-          localStorage.setItem('electromarket_token', authData.token);
-          localStorage.setItem('electromarket_user', JSON.stringify(authData.user));
-        } catch (regErr) {
-          console.error('Erro na autenticação automática para criação:', regErr);
-        }
-      }
-    }
-
     // Enviar anúncio real para o backend na Render
-    let loggedInUserId = currentUser ? currentUser.id : "user-buyer-1";
-    try {
-      const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-      if (supabaseUser) {
-        loggedInUserId = supabaseUser.id;
-        console.log('[CreateAd] Capturado userId dinâmico da sessão ativa do Supabase:', loggedInUserId);
-      }
-    } catch (err) {
-      console.warn('[CreateAd] Erro ao obter userId dinâmico do Supabase, usando fallback:', err);
-    }
-
+    const loggedInUserId = currentUser.id;
     let realProduct: Product | null = null;
     try {
       let response;
@@ -2372,17 +2340,6 @@ export default function App() {
           formData.append('images', file);
         });
 
-        // Debug form state elements securely without exposing files binary
-        const formObj: Record<string, any> = {};
-        formData.forEach((value, key) => {
-          if (value instanceof File) {
-            formObj[key] = `File: ${value.name} (${value.size} bytes)`;
-          } else {
-            formObj[key] = value;
-          }
-        });
-        console.log("Payload enviado do Frontend (FormData):", formObj);
-
         response = await api.post<{ message: string; ad: Product }>('/ads', formData);
       } else {
         const payloadJson = {
@@ -2398,7 +2355,6 @@ export default function App() {
           isFeatured: newAd.isFeatured,
           userId: loggedInUserId
         };
-        console.log("Payload enviado do Frontend:", payloadJson);
 
         response = await api.post<{ message: string; ad: Product }>('/ads', payloadJson);
       }
@@ -2456,10 +2412,11 @@ export default function App() {
     e.preventDefault();
     if (!typedMessage.trim() || !activeChatId) return;
 
+    const senderId = currentUser ? currentUser.id : "anonymous";
     const newMsg: Message = {
       id: `msg-${Date.now()}`,
       chatId: activeChatId,
-      senderId: "user-buyer-1", // Buyer is typing
+      senderId: senderId,
       text: typedMessage,
       createdAt: new Date().toISOString()
     };
@@ -2564,20 +2521,9 @@ export default function App() {
               )}
             </button>
 
-            <div className="flex items-center gap-2 ml-1">
-              <div 
-                className="p-2 hover:bg-slate-100 rounded-full cursor-pointer relative"
-                title="Carrinho de Compras / Chats"
-                onClick={() => { navigate("/chat"); }}
-              >
-                <ShoppingCart className="w-5 h-5 text-slate-600" />
-                <span className="absolute top-1 right-1 bg-[#2563eb] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {products.length}
-                </span>
-              </div>
-
+            <div className="flex items-center gap-3">
               {currentUser ? (
-                <div className="flex items-center gap-2.5 pl-2.5 border-l border-slate-200">
+                <div className="flex items-center gap-2.5">
                   {/* Sino de Notificações */}
                   <div 
                     className="p-2 hover:bg-slate-100 rounded-full cursor-pointer relative transition-all duration-150"
@@ -2592,7 +2538,7 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 pl-2.5 border-l border-slate-200">
                     <img
                       src={currentUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80px&h=80px&q=80'}
                       alt={currentUser.name}
@@ -2686,15 +2632,31 @@ export default function App() {
               transition={{ duration: 0.22, ease: "easeOut" }}
               className="w-full flex flex-col"
             >
-              <ChatWindow
-                currentUser={currentUser || INITIAL_USERS[0]}
-                chats={chats}
-                messages={messages}
-                products={products.length > 0 ? products : INITIAL_PRODUCTS}
-                users={users}
-                onSendMessage={handleSendDynamicMessage}
-                selectedChatIdFromRoute={activeChatId}
-              />
+              {currentUser ? (
+                <ChatWindow
+                  currentUser={currentUser}
+                  chats={chats}
+                  messages={messages}
+                  products={products.length > 0 ? products : INITIAL_PRODUCTS}
+                  users={users}
+                  onSendMessage={handleSendDynamicMessage}
+                  selectedChatIdFromRoute={activeChatId}
+                />
+              ) : (
+                <div className="max-w-md mx-auto my-12 bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-md">
+                  <MessageSquare className="w-12 h-12 text-blue-500 mx-auto mb-4 animate-bounce" />
+                  <h3 className="text-xl font-bold text-slate-800">Canais de Conversa</h3>
+                  <p className="text-slate-500 text-sm mt-3 leading-relaxed">
+                    Você precisa estar autenticado com uma conta real para visualizar, negociar e responder às suas mensagens de chat.
+                  </p>
+                  <button 
+                    onClick={() => setShowLoginModal(true)}
+                    className="mt-6 bg-[#2563eb] text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition cursor-pointer"
+                  >
+                    Fazer Login com o Google
+                  </button>
+                </div>
+              )}
             </motion.div>
           ) : currentPath.startsWith("/profile") ? (
             <motion.div
@@ -3247,11 +3209,10 @@ export default function App() {
                 </label>
               </div>
 
-              <div className="p-4 bg-slate-50 text-xs text-slate-700 rounded-lg border border-slate-200 flex items-start gap-2 mb-4 leading-relaxed">
+              <div className="p-4 bg-slate-50 text-xs text-slate-750 rounded-lg border border-slate-200 flex items-start gap-2 mb-4 leading-relaxed">
                 <Info className="w-4.5 h-4.5 shrink-0 text-[#2563eb] mt-0.5" />
                 <div>
-                  <strong>Identidade do Vendedor (PostgreSQL via Prisma):</strong> O anúncio será gravado com o seu 
-                  User ID <code>{currentUser ? currentUser.id : "user-buyer-1"}</code> ({currentUser ? currentUser.email : "Carol Santos"}), vinculando a chave estrangeira <code>userId</code> diretamente à tabela <code>User</code>.
+                  Este anúncio será publicado em sua conta do ElectroMarket e associado ao seu perfil de vendedor: <strong>{currentUser ? currentUser.email : "Visitante"}</strong>.
                 </div>
               </div>
 
@@ -3501,35 +3462,6 @@ export default function App() {
                 </svg>
                 <span>Continuar com o Google</span>
               </button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200"></div>
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white px-2 text-slate-400 font-semibold tracking-wider text-[10px]">Ou use e-mail de demonstração</span>
-                </div>
-              </div>
-
-              {/* Demo Login (Carol Santos) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentUser(INITIAL_USERS[0]);
-                  setShowLoginModal(false);
-                }}
-                className="w-full bg-slate-900 border border-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 px-4 rounded-xl text-xs transition shadow-sm cursor-pointer flex items-center justify-center gap-1.5 duration-150 active:scale-95 animate-duration-150"
-              >
-                <span>Entrar como Carol Santos (Demo)</span>
-              </button>
-
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-150 text-[10.5px] text-slate-500 leading-normal flex items-start gap-1.5">
-                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                <div>
-                  <strong>Configuração Supabase:</strong> Este fluxo usa <code>@supabase/supabase-js</code>. 
-                  Lembre-se de fornecer <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> nas variáveis de ambiente da Vercel ou local.
-                </div>
-              </div>
             </div>
 
           </div>
@@ -3586,7 +3518,7 @@ export default function App() {
                   (Array.isArray(messages) ? messages : [])
                     .filter(m => m && m.chatId === activeChatId)
                     .map(msg => {
-                      const isMe = msg.senderId === (currentUser ? currentUser.id : "user-buyer-1"); // My profile (Carol Santos)
+                      const isMe = currentUser ? msg.senderId === currentUser.id : false;
                       const senderObj = users.find(u => u.id === msg.senderId);
                     return (
                       <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
