@@ -120,11 +120,16 @@ export default function ChatDetailPage() {
         
         {/* MESSAGES */}
         <div className="flex-1 overflow-y-auto p-4 flex flex-col space-y-4">
-            {messages.map((msg) => (
-                <div key={msg.id} className={`p-3 rounded-lg max-w-[70%] ${msg.senderId === user?.id ? 'bg-blue-600 text-white self-end' : 'bg-slate-100 text-slate-800 self-start'}`}>
+            {messages.map((msg) => {
+              const isMyMessage = msg.senderId === user?.id;
+              return (
+                <div key={msg.id} className={`flex flex-col w-full ${isMyMessage ? 'items-end' : 'items-start'}`}>
+                  <div className={`p-3 rounded-lg w-fit max-w-[70%] ${isMyMessage ? 'bg-blue-600 text-white ml-auto' : 'bg-slate-100 text-slate-800 mr-auto'}`}>
                     {msg.text}
+                  </div>
                 </div>
-            ))}
+              );
+            })}
             <div ref={messagesEndRef} />
         </div>
 

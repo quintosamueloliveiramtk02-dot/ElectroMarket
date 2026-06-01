@@ -6,7 +6,6 @@ import { supabase } from '../lib/supabaseClient';
 import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { MessageSquare, CircleDot } from 'lucide-react';
-import Link from 'next/link';
 
 interface ChatUser {
   id: string;
@@ -77,9 +76,17 @@ export default function ChatSidebar() {
         ) : chats.map((chat) => {
           const other = getOtherParticipant(chat);
           return (
-            <Link
+            <div
               key={chat.id}
-              href={`/chat/${chat.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                const targetId = chat.id || chat.chatRoomId;
+                if (targetId) {
+                  window.location.href = `/chat/${targetId}`;
+                } else {
+                  console.error("ID do chat não encontrado:", chat);
+                }
+              }}
               className="p-4 hover:bg-slate-50 cursor-pointer block border-b border-slate-100"
             >
               <div className="flex items-center gap-3">
@@ -91,7 +98,7 @@ export default function ChatSidebar() {
                   <p className="text-[10px] text-blue-600 font-bold truncate">{chat.product?.title}</p>
                 </div>
               </div>
-            </Link>
+            </div>
           );
         })}
       </div>
