@@ -48,7 +48,6 @@ export default function ChatDetailPage() {
       try {
         setLoadingChats(true);
         const data = await api.get<any[]>('/chats');
-        console.log("DEBUG PAGE - Lista completa de chats:", data);
         setChats(data);
       } catch (err) {
         console.error(err);
@@ -72,8 +71,6 @@ export default function ChatDetailPage() {
   // Combined History Fetch and Realtime Listener
   useEffect(() => {
     if (!chatId) return;
-
-    console.log("Mensagens no estado:", messages);
 
     const fetchHistory = async () => {
       try {
@@ -110,7 +107,11 @@ export default function ChatDetailPage() {
     setInputText('');
   };
 
-  const activeChat = chats.find((c) => c.id === chatId);
+  const activeChat = chats.find((c) =>
+    String(c.id) === String(chatId) ||
+    String(c.chatRoomId) === String(chatId) ||
+    String(c.roomId) === String(chatId)
+  );
   const otherUser = activeChat ? (user?.id === activeChat.buyerId ? activeChat.seller : activeChat.buyer) : null;
   const productInfo = activeChat?.product;
 
