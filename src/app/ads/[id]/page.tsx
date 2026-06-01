@@ -89,7 +89,7 @@ export default function AdDetailPage() {
       });
 
       console.log('Chat estabelecido com sucesso:', response.id);
-      router.push(`/chat?id=${response.id}`);
+      router.push(`/chat/${response.id}`);
     } catch (err: any) {
       console.error('Erro ao iniciar chat com o vendedor:', err);
       alert(err.message || 'Houve um problema ao conectar com o vendedor. Tente novamente.');
