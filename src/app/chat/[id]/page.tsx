@@ -180,13 +180,20 @@ export default function ChatDetailPage() {
 
   // Fetching message history from real database via HTTP endpoint with 3s polling
   useEffect(() => {
-    if (!chatId || !user) return;
+    if (!chatId || !user) {
+      setMessages([]); // Clear messages when no chat is active
+      return;
+    }
+
+    // Clear messages immediately when switching rooms
+    setMessages([]);
+    setLoadingMessages(true);
 
     const fetchHistory = async (isInitial = false) => {
       try {
-        if (isInitial) setLoadingMessages(true);
         const data = await api.get<any>(`/chats/rooms/${chatId}/messages`);
         
+        // ... (preserve existing message parsing logic) ...
         let messagesArray: MessageWithSender[] = [];
         if (data) {
           if (Array.isArray(data)) {
@@ -206,6 +213,7 @@ export default function ChatDetailPage() {
         if (isInitial) scrollToBottom();
       } catch (err) {
         console.error('Erro ao carregar histórico de mensagens via HTTP:', err);
+        setMessages([]); // Clear on error
       } finally {
         if (isInitial) setLoadingMessages(false);
       }

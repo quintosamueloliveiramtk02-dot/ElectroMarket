@@ -181,19 +181,22 @@ export default function ChatPage() {
     };
   }, [user]);
 
-  // Entra na sala do socket toda vez que o Active Chat Id mudar, e busca mensagens via HTTP com polling de 3 segundos
+  // Carregar histórico de mensagens via HTTP e Poll
   useEffect(() => {
-    if (!activeChatId || !user) return;
+    if (!activeChatId || !user) {
+      setMessages([]); 
+      return;
+    }
 
-    // Emitir ingresso via socket se conectado
+    setMessages([]);
+    setLoadingMessages(true);
+
     if (socketRef.current) {
       socketRef.current.emit('join_room', activeChatId);
     }
-
-    // Carregar histórico de mensagens via HTTP
+    
     const fetchHistory = async (isInitial = false) => {
       try {
-        if (isInitial) setLoadingMessages(true);
         const data = await api.get<any>(`/chats/rooms/${activeChatId}/messages`);
         
         let messagesArray: MessageWithSender[] = [];
@@ -215,13 +218,14 @@ export default function ChatPage() {
         if (isInitial) scrollToBottom();
       } catch (err) {
         console.error('Erro ao carregar histórico de mensagens:', err);
+        setMessages([]); 
       } finally {
         if (isInitial) setLoadingMessages(false);
       }
     };
 
     fetchHistory(true);
-
+    
     const interval = setInterval(() => {
       fetchHistory(false);
     }, 3000);
