@@ -31,6 +31,7 @@ interface ProfilePageProps {
   onLogout?: () => Promise<void> | void;
   onLoginClick?: () => void;
   onAnnounceClick?: () => void;
+  authLoading?: boolean;
 }
 
 export default function ProfilePage({ 
@@ -40,7 +41,8 @@ export default function ProfilePage({
   setCurrentUser, 
   onLogout, 
   onLoginClick,
-  onAnnounceClick 
+  onAnnounceClick,
+  authLoading
 }: ProfilePageProps) {
   // Use currentUser prop as primary source of truth, fall back to hookUser if not supplied
   let hookUser: User | null = null;
@@ -54,6 +56,7 @@ export default function ProfilePage({
   }
 
   const activeUser = currentUser !== undefined ? currentUser : hookUser;
+  const isAuthLoading = authLoading !== undefined ? authLoading : hookLoading;
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -75,7 +78,11 @@ export default function ProfilePage({
 
   // Route Protection: Redirect if user session is initialized and no activeUser exists
   useEffect(() => {
-    if (!hookLoading && !activeUser) {
+    if (isAuthLoading) {
+      return;
+    }
+
+    if (!activeUser) {
       if (onLoginClick) {
         onLoginClick();
       }
@@ -88,7 +95,7 @@ export default function ProfilePage({
         handleBack();
       }
     }
-  }, [activeUser, hookLoading]);
+  }, [activeUser, isAuthLoading]);
 
   const fetchMyProducts = async () => {
     if (!activeUser) return;
@@ -230,11 +237,11 @@ export default function ProfilePage({
     }
   };
 
-  if (hookLoading && !activeUser) {
+  if (isAuthLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
-        <p className="text-slate-600 font-medium animate-pulse">Verificando sua sessão...</p>
+        <p className="text-slate-600 font-medium animate-pulse font-sans">Carregando...</p>
       </div>
     );
   }

@@ -1615,6 +1615,7 @@ export default function App() {
   
   // Supabase Google Auth and local login integration
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
   const [isLoginMode, setIsLoginMode] = useState<boolean>(true);
   const [unreadCount, setUnreadCount] = useState<number>(0);
@@ -1669,6 +1670,8 @@ export default function App() {
         }
       } catch (err) {
         console.error('Erro ao verificar sessão do Supabase:', err);
+      } finally {
+        setAuthLoading(false);
       }
     };
     checkSession();
@@ -2887,6 +2890,7 @@ export default function App() {
                 onLogout={handleLogout}
                 onLoginClick={() => setShowLoginModal(true)}
                 onAnnounceClick={() => setShowAnnounceModal(true)}
+                authLoading={authLoading}
               />
             </motion.div>
           ) : (
