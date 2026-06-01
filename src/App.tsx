@@ -2504,22 +2504,24 @@ export default function App() {
               <span>Anunciar</span>
             </button>
 
-            <button 
-              onClick={() => { navigate("/chat"); }}
-              className="border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-lg font-semibold text-sm transition flex items-center gap-1.5 cursor-pointer"
-              id="btn-header-chats-link"
-            >
-              <MessageSquare className="w-4.5 h-4.5 text-[#2563eb]" />
-              <span className="hidden lg:inline">Chats de Negociação</span>
-              {chats.length > 0 && (
-                <span className="relative flex h-2.5 w-2.5">
-                  {hasNewMessageAlert && (
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  )}
-                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${hasNewMessageAlert ? "bg-red-500 animate-pulse bg-red-500" : "bg-red-400"}`}></span>
-                </span>
-              )}
-            </button>
+            {currentUser && (
+              <button 
+                onClick={() => { navigate("/chat"); }}
+                className="border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-lg font-semibold text-sm transition flex items-center gap-1.5 cursor-pointer"
+                id="btn-header-chats-link"
+              >
+                <MessageSquare className="w-4.5 h-4.5 text-[#2563eb]" />
+                <span className="hidden lg:inline">Chats de Negociação</span>
+                {chats.length > 0 && (
+                  <span className="relative flex h-2.5 w-2.5">
+                    {hasNewMessageAlert && (
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    )}
+                    <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${hasNewMessageAlert ? "bg-red-500 animate-pulse bg-red-500" : "bg-red-400"}`}></span>
+                  </span>
+                )}
+              </button>
+            )}
 
             <div className="flex items-center gap-3">
               {currentUser ? (
