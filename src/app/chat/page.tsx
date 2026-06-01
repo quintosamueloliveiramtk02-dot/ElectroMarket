@@ -1,25 +1,26 @@
 'use client';
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { MessageSquare } from 'lucide-react';
 import { api } from '../../lib/api';
 
 export default function ChatPage() {
   const router = useRouter();
+  const params = useParams();
 
   useEffect(() => {
     const fetchChats = async () => {
       try {
         const chats = await api.get<any[]>('/chats');
-        if (chats && chats.length > 0) {
-          router.replace(`/chat/${chats[0].id || chats[0].chatRoomId || chats[0].roomId}`);
+        if (chats && chats.length > 0 && !params?.id) {
+          router.replace(`/chat/${chats[0].id}`);
         }
       } catch (err) {
         console.error('Erro ao buscar chat para redirect:', err);
       }
     };
     fetchChats();
-  }, [router]);
+  }, [router, params]);
 
   return (
     <div className="hidden lg:flex flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm flex-col justify-center items-center p-8 bg-slate-50/25">

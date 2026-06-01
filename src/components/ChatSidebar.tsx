@@ -40,7 +40,7 @@ const getAvatarColor = (identifier: string) => {
 export default function ChatSidebar() {
   const router = useRouter();
   const params = useParams();
-  const currentChatId = params?.id;
+  const currentChatId = params?.id ? String(params.id) : null;
   const { user } = useAuth();
   const [chats, setChats] = useState<ChatListItem[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
@@ -81,7 +81,7 @@ export default function ChatSidebar() {
             <div className="p-8 text-center text-sm text-slate-500">Nenhuma conversa ativa no momento.</div>
         ) : chats.map((chat) => {
           const other = getOtherParticipant(chat);
-          const isActive = currentChatId && String(chat.id) === String(currentChatId);
+          const isActive = currentChatId && chat?.id && String(chat.id) === currentChatId;
           return (
             <div
               key={chat.id}
