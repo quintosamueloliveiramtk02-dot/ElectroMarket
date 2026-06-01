@@ -2406,7 +2406,6 @@ export default function App() {
   const handleCreateAd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
-      alert("Acesso Negado: Você precisa estar logado para cadastrar um smartphone no ElectroMarket.");
       setShowAnnounceModal(false);
       setShowLoginModal(true);
       return;
