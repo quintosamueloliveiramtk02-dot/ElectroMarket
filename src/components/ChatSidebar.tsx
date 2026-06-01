@@ -67,6 +67,11 @@ export default function ChatSidebar() {
     return partner || { name: 'Contato', avatarUrl: '' };
   };
 
+  if (chats && chats.length > 0) {
+    console.log("RAIO-X DO PRIMEIRO CHAT:", JSON.stringify(chats[0], null, 2));
+    console.log("ID DA URL CAPTURADO:", currentChatId);
+  }
+
   return (
     <div className="w-80 xl:w-96 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col shrink-0 overflow-hidden">
       <div className="p-4 border-b border-slate-150 flex items-center justify-between bg-white">
