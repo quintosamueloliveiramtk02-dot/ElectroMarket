@@ -178,22 +178,21 @@ export default function ChatDetailPage() {
     };
   }, [user, chatId]);
 
-  // Fetching message history from real database via HTTP endpoint with 3s polling
+  // Fetching message history from real database via HTTP endpoint
   useEffect(() => {
-    if (!chatId || !user) {
-      setMessages([]); // Clear messages when no chat is active
+    if (!chatId) {
+      setMessages([]);
+      setLoadingMessages(false);
       return;
     }
 
-    // Clear messages immediately when switching rooms
     setMessages([]);
     setLoadingMessages(true);
 
-    const fetchHistory = async (isInitial = false) => {
+    const fetchHistory = async () => {
       try {
         const data = await api.get<any>(`/chats/rooms/${chatId}/messages`);
         
-        // ... (preserve existing message parsing logic) ...
         let messagesArray: MessageWithSender[] = [];
         if (data) {
           if (Array.isArray(data)) {
@@ -210,78 +209,23 @@ export default function ChatDetailPage() {
         }
         
         setMessages(messagesArray);
-        if (isInitial) scrollToBottom();
+        scrollToBottom();
       } catch (err) {
         console.error('Erro ao carregar histórico de mensagens via HTTP:', err);
-        setMessages([]); // Clear on error
+        setMessages([]);
       } finally {
-        if (isInitial) setLoadingMessages(false);
+        setLoadingMessages(false);
       }
     };
 
-    fetchHistory(true);
-
-    const interval = setInterval(() => {
-      fetchHistory(false);
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [chatId, user]);
-
-  // Listening to real-time events triggered by server side broadcasts
-  useEffect(() => {
-    const socket = socketRef.current;
-    if (!socket) return;
-
-    const handleReceiveMessage = (newMessage: MessageWithSender) => {
-      // Check if received message belongs to currently opened chat channel
-      if (newMessage.chatId === chatId) {
-        setMessages((prev) => {
-          // Idempotency: skip inserting if message is already stored in state
-          if (prev.some((msg) => msg.id === newMessage.id)) return prev;
-
-          // Se encontrar mensagem temporária enviada por nós com o mesmo texto, substitui pelo ID real do banco
-          const tempIndex = prev.findIndex(
-            (msg) => msg.id.startsWith('tempid-') && msg.senderId === newMessage.senderId && msg.text === newMessage.text
-          );
-
-          if (tempIndex !== -1) {
-            const updated = [...prev];
-            updated[tempIndex] = newMessage;
-            return updated;
-          }
-
-          return [...prev, newMessage];
-        });
-        scrollToBottom();
-      }
-
-      // Live-update last preview sentence in sidebar
-      setChats((prevChats) =>
-        prevChats.map((chat) => {
-          if (chat.id === newMessage.chatId) {
-            return {
-              ...chat,
-              messages: [{ id: newMessage.id, text: newMessage.text, createdAt: newMessage.createdAt }]
-            };
-          }
-          return chat;
-        })
-      );
-    };
-
-    socket.on('receive_message', handleReceiveMessage);
-
-    return () => {
-      socket.off('receive_message', handleReceiveMessage);
-    };
+    fetchHistory();
   }, [chatId]);
 
   // Escuta em tempo real do Supabase v2 para Message
   useEffect(() => {
     if (!chatId) return;
 
-    console.log("Iniciando escuta em tempo real para a sala:", chatId);
+    console.log("Iniciando assinatura Realtime para a sala:", chatId);
 
     const channel = supabase
       .channel(`room_messages_${chatId}`)
@@ -294,35 +238,19 @@ export default function ChatDetailPage() {
           filter: `chatRoomId=eq.${chatId}`
         },
         (payload) => {
-          console.log("Nova mensagem recebida via Realtime:", payload);
+          console.log("Nova mensagem via Realtime:", payload);
           const newMessage = payload.new as any;
 
-          // Atualiza o estado garantindo que não vamos duplicar
           setMessages((prev) => {
-            const safePrev = Array.isArray(prev) ? prev : [];
-            if (safePrev.some(msg => msg.id === newMessage.id)) return safePrev;
+            if (prev.some(msg => msg.id === newMessage.id)) return prev;
             
             const formattedMsg = {
               ...newMessage,
               chatId: newMessage.chatRoomId || newMessage.chatId,
               chatRoomId: newMessage.chatRoomId || newMessage.chatId
             };
-            return [...safePrev, formattedMsg];
+            return [...prev, formattedMsg];
           });
-
-          // Atualizar o preview do último chat na barra lateral
-          setChats((prevChats) => {
-            return prevChats.map((chat) => {
-              if (chat.id === newMessage.chatRoomId || chat.id === newMessage.chatId) {
-                return {
-                  ...chat,
-                  messages: [{ id: newMessage.id, text: newMessage.text, createdAt: newMessage.createdAt }]
-                };
-              }
-              return chat;
-            });
-          });
-          
           scrollToBottom();
         }
       )
@@ -331,7 +259,7 @@ export default function ChatDetailPage() {
       });
 
     return () => {
-      console.log("Limpando canal da sala:", chatId);
+      console.log("Removendo canal da sala:", chatId);
       supabase.removeChannel(channel);
     };
   }, [chatId]);
