@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabaseClient';
 import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { MessageSquare, CircleDot } from 'lucide-react';
+import Link from 'next/link';
 
 interface ChatUser {
   id: string;
@@ -76,7 +77,7 @@ export default function ChatSidebar() {
         ) : chats.map((chat) => {
           const other = getOtherParticipant(chat);
           return (
-            <a
+            <Link
               key={chat.id}
               href={`/chat/${chat.id}`}
               className="p-4 hover:bg-slate-50 cursor-pointer block border-b border-slate-100"
@@ -90,7 +91,7 @@ export default function ChatSidebar() {
                   <p className="text-[10px] text-blue-600 font-bold truncate">{chat.product?.title}</p>
                 </div>
               </div>
-            </a>
+            </Link>
           );
         })}
       </div>
