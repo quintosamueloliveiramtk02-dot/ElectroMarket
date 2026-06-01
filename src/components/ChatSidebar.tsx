@@ -76,18 +76,10 @@ export default function ChatSidebar() {
         ) : chats.map((chat) => {
           const other = getOtherParticipant(chat);
           return (
-            <div
+            <a
               key={chat.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                const targetId = chat.id; // chat.id is sufficient based on interface
-                if (targetId) {
-                  window.location.href = `/chat/${targetId}`;
-                } else {
-                  console.error("ID do chat não encontrado:", chat);
-                }
-              }}
-              className="p-4 hover:bg-slate-50 cursor-pointer"
+              href={`/chat/${chat.id}`}
+              className="p-4 hover:bg-slate-50 cursor-pointer block border-b border-slate-100"
             >
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold ${getAvatarColor(other.name)}`}>
@@ -98,7 +90,7 @@ export default function ChatSidebar() {
                   <p className="text-[10px] text-blue-600 font-bold truncate">{chat.product?.title}</p>
                 </div>
               </div>
-            </div>
+            </a>
           );
         })}
       </div>
