@@ -42,6 +42,11 @@ import ProductSkeletonGrid from './components/ProductSkeletonGrid';
 import ProfilePage from './app/profile/page';
 import { motion, AnimatePresence } from 'motion/react';
 
+const BRAZIL_STATES = [
+  "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT",
+  "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"
+];
+
 // Let's create the hardcoded database code representations to display & copy easily.
 const SCHEMA_PRISMA_CODE = `datasource db {
   provider = "postgresql"
@@ -2101,6 +2106,12 @@ export default function App() {
     imagePreset: "https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht"
   });
 
+  // Helper inputs for location field separation
+  const [adCity, setAdCity] = useState("São Paulo");
+  const [adUf, setAdUf] = useState("SP");
+  const [editAdCity, setEditAdCity] = useState("São Paulo");
+  const [editAdUf, setEditAdUf] = useState("SP");
+
   const handleDeleteAd = async (adId: string, event: React.MouseEvent) => {
     event.stopPropagation(); // Evita que clique no botão abra os detalhes do produto
 
@@ -2150,6 +2161,13 @@ export default function App() {
   const handleEditAdClick = (product: Product, event: React.MouseEvent) => {
     event.stopPropagation();
     setEditingAdId(product.id);
+    const loc = product.location || "São Paulo, SP";
+    const parts = loc.split(",");
+    const cityPart = parts[0]?.trim() || "São Paulo";
+    const ufPart = parts[1]?.trim() || "SP";
+    setEditAdCity(cityPart);
+    setEditAdUf(ufPart);
+    
     setEditAdData({
       title: product.title,
       description: product.description || "",
@@ -2158,7 +2176,7 @@ export default function App() {
       model: product.model || "",
       batteryHealth: product.batteryHealth ? product.batteryHealth.toString() : "",
       storage: product.storage || "128GB",
-      location: product.location || "São Paulo, SP",
+      location: loc,
       isFeatured: !!product.isFeatured,
       imagePreset: product.images?.[0] || "https://lh3.googleusercontent.com/aida-public/AB6AXuC43OzvIdjYk28qZ-NdeKucLaaTJmVG0FxvCcmIax7R-PLOd0QI_BLz74ds0_zluD2-puXWgboxH94dGqqkq1-3SvuZJikcfjIqIZ9K-f6WxqMQ85ZwQLuvzJjmfxvffVuueWe3zEwqrJfxC5v-IbHpMOTIpZlCKIlAhj9CsgF3KH81JfkABaANSgXhBH8aBTg4LqSAe40ZxuC2VzN8wgvUGrL31FNN-xQ4b9LVLNb0zhrKvVKdL4UMI3HSTLCOmhTiHtAcqR0XL9ht"
     });
@@ -2394,6 +2412,8 @@ export default function App() {
     
     // Auto reset form and state
     setSelectedImageFiles([]);
+    setAdCity("São Paulo");
+    setAdUf("SP");
     setNewAd({
       title: "",
       description: "",
@@ -3109,18 +3129,44 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="mb-4">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
-                  Localização (Cidade, UF) *
-                </label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="Ex: São Paulo, SP"
-                  value={newAd.location}
-                  onChange={(e) => setNewAd({...newAd, location: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
-                />
+              <div className="mb-4 grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 text-left">
+                    Cidade *
+                  </label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: São Paulo"
+                    value={adCity}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setAdCity(value);
+                      setNewAd({ ...newAd, location: `${value.trim()}, ${adUf}` });
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 text-left">
+                    Estado (UF) *
+                  </label>
+                  <select
+                    value={adUf}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setAdUf(value);
+                      setNewAd({ ...newAd, location: `${adCity.trim()}, ${value}` });
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  >
+                    {BRAZIL_STATES.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Photos area supporting draggable upload via Cloudinary & fallback presets */}
@@ -3345,18 +3391,44 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="mb-4">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
-                  Localização (Cidade, UF) *
-                </label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="Ex: São Paulo, SP"
-                  value={editAdData.location}
-                  onChange={(e) => setEditAdData({...editAdData, location: e.target.value})}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600"
-                />
+              <div className="mb-4 grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 text-left">
+                    Cidade *
+                  </label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: São Paulo"
+                    value={editAdCity}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setEditAdCity(value);
+                      setEditAdData({ ...editAdData, location: `${value.trim()}, ${editAdUf}` });
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 text-left">
+                    Estado (UF) *
+                  </label>
+                  <select
+                    value={editAdUf}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setEditAdUf(value);
+                      setEditAdData({ ...editAdData, location: `${editAdCity.trim()}, ${value}` });
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    {BRAZIL_STATES.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="mb-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl p-4">
