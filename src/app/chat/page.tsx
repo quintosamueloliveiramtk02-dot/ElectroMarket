@@ -496,9 +496,7 @@ export default function ChatPage() {
                   <div
                     key={chat.id}
                     onClick={() => {
-                      setActiveChatId(chat.id);
-                      // Opcional: Atualizar a URL sutilmente
-                      router.replace(`/chat?id=${chat.id}`);
+                      router.push(`/chat/${chat.id}`);
                     }}
                     className={`p-4 flex items-start gap-3 cursor-pointer transition select-none ${
                       isSelected 
