@@ -68,32 +68,38 @@ export default function ChatDetailPage() {
     return () => { socket.disconnect(); };
   }, [user, chatId]);
 
+  // Combined History Fetch and Realtime Listener
   useEffect(() => {
     if (!chatId) return;
+
+    console.log("Mensagens no estado:", messages);
+
     const fetchHistory = async () => {
       try {
         setLoadingMessages(true);
         const data = await api.get<any>(`/chats/rooms/${chatId}/messages`);
-        setMessages(data?.messages || data || []);
+        const initialMessages = data?.messages || data || [];
+        setMessages(initialMessages);
       } catch (err) {
         setMessages([]);
       } finally {
         setLoadingMessages(false);
       }
     };
-    fetchHistory();
-  }, [chatId]);
 
-  // Realtime
-  useEffect(() => {
-    if (!chatId) return;
+    fetchHistory();
+
+    // Subscribe to realtime updates
     const channel = supabase
       .channel(`room_messages_${chatId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message', filter: `chatRoomId=eq.${chatId}` }, (payload) => {
         setMessages((prev) => [...prev, payload.new]);
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    return () => { 
+      supabase.removeChannel(channel); 
+    };
   }, [chatId]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
