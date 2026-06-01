@@ -67,10 +67,6 @@ export default function ChatSidebar() {
     return partner || { name: 'Contato', avatarUrl: '' };
   };
 
-  if (chats && chats.length > 0) {
-    console.log("RAIO-X CHAT NOVO:", JSON.stringify(chats[0], null, 2));
-  }
-
   return (
     <div className="w-80 xl:w-96 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col shrink-0 overflow-hidden">
       <div className="p-4 border-b border-slate-150 flex items-center justify-between bg-white">
@@ -81,6 +77,8 @@ export default function ChatSidebar() {
       <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
         {loadingChats ? (
             <div className="p-4 text-center text-xs text-slate-400">Carregando...</div>
+        ) : chats.length === 0 ? (
+            <div className="p-8 text-center text-sm text-slate-500">Nenhuma conversa ativa no momento.</div>
         ) : chats.map((chat) => {
           const other = getOtherParticipant(chat);
           const isActive = currentChatId && String(chat.id) === String(currentChatId);
