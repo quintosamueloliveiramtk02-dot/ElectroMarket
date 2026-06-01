@@ -12,8 +12,20 @@ cloudinary.config({
 // 1. Criar um anúncio associado ao ID do usuário autenticado
 export const createAd = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, description, price, brand, model, batteryHealth, storage, images, location, isFeatured, hasWarranty, userId: bodyUserId } = req.body;
+    let { title, description, price, brand, model, batteryHealth, storage, images, location, city, uf, state, adCity, adUf, isFeatured, hasWarranty, userId: bodyUserId } = req.body;
     let userId = req.userId || bodyUserId;
+
+    // Se a localização não foi enviada como string única, mas temos os campos Cidade / Estado separados
+    if (!location) {
+      const parts: string[] = [];
+      const resolvedCity = city || adCity;
+      const resolvedState = uf || state || adUf;
+      if (resolvedCity) parts.push(resolvedCity);
+      if (resolvedState) parts.push(resolvedState);
+      if (parts.length > 0) {
+        location = parts.join(", ");
+      }
+    }
 
     // Garantir ID de usuário válido para evitar falha por Integridade Referencial (Foreign Key)
     if (!userId) {
@@ -31,6 +43,39 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
           }
         });
         userId = dummyUser.id;
+      }
+    } else {
+      // 1. Aguardar a sincronização do usuário vindo do Supabase no banco de dados PostgreSQL
+      let userExists = false;
+      for (let attempt = 1; attempt <= 6; attempt++) {
+        const existingUser = await prisma.user.findUnique({
+          where: { id: userId }
+        });
+        if (existingUser) {
+          userExists = true;
+          break;
+        }
+        console.log(`[Ad-Create] Usuário ${userId} não encontrado no banco PostgreSQL. Tentativa ${attempt}/6. Aguardando 500ms para a sincronização completar...`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      // Fallback: Se mesmo após as tentativas ainda não estiver cadastrado, criamos um registro provisório para não travar a criação do anúncio
+      if (!userExists) {
+        console.warn(`[Ad-Create] Usuário ${userId} não foi sincronizado a tempo. Aplicando fallback de criação automática de usuário...`);
+        try {
+          await prisma.user.create({
+            data: {
+              id: userId,
+              email: req.body.userEmail || req.body.email || `vendedor-${userId}@electromarket.com`,
+              name: req.body.userName || req.body.name || "Vendedor do ElectroMarket",
+              phone: req.body.userPhone || req.body.phone || "(11) 99999-9999",
+              avatarUrl: req.body.userAvatar || req.body.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120px&h=120px&q=80",
+              passwordHash: "oauth-social-login-placeholder-fallback",
+            }
+          });
+        } catch (fallbackCreateErr: any) {
+          console.error("[Ad-Create] Erro ao criar usuário de fallback (talvez criado em paralelo por outra requisição):", fallbackCreateErr.message || fallbackCreateErr);
+        }
       }
     }
 
@@ -118,6 +163,8 @@ export const createAd = async (req: AuthRequest, res: Response): Promise<void> =
       ad,
     });
   } catch (error: any) {
+    console.error("Ocorreu um erro ao criar o anúncio no banco de dados:");
+    console.error(error);
     console.error("Erro detalhado do Prisma nos Anúncios:", JSON.stringify(error, null, 2));
     console.error("Mensagem do erro:", error.message || error);
     res.status(500).json({ error: "Erro interno ao criar anúncio", details: error.message });
