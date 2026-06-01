@@ -1618,6 +1618,12 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
+  // Estados adicionais para formulário de login por e-mail e senha com Supabase
+  const [loginEmail, setLoginEmail] = useState<string>("");
+  const [loginPassword, setLoginPassword] = useState<string>("");
+  const [loginError, setLoginError] = useState<string>("");
+  const [loginLoading, setLoginLoading] = useState<boolean>(false);
+
   // Sincroniza informações do Google Auth com o banco principal via Prisma no Backend
   const syncUserToBackend = async (userObj: User) => {
     try {
@@ -1707,6 +1713,88 @@ export default function App() {
     } catch (err: any) {
       console.error('Erro no login social do Google:', err.message || err);
       alert('Erro ao iniciar login com o Google. Certifique-se de configurar VITE_SUPABASE_URL.');
+    }
+  };
+
+  const handleEmailPasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError("");
+    setLoginLoading(true);
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(loginEmail)) {
+      setLoginError("Formato de e-mail inválido.");
+      setLoginLoading(false);
+      return;
+    }
+
+    if (!loginPassword || loginPassword.length < 6) {
+      setLoginError("A senha deve ter pelo menos 6 caracteres.");
+      setLoginLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
+      });
+
+      if (error) {
+        if (error.message.includes("Invalid login credentials") || error.message.includes("does not match")) {
+          setLoginError("E-mail ou senha incorretos.");
+        } else {
+          setLoginError(error.message);
+        }
+        setLoginLoading(false);
+        return;
+      }
+
+      if (data && data.session) {
+        const session = data.session;
+        const user = data.session.user;
+
+        // Pegar informações e enviar para a rota de sincronização/validação no backend
+        const userObj: User = {
+          id: user.id,
+          email: user.email || '',
+          name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
+          avatarUrl: user.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120px&h=120px&q=80',
+          phone: user.phone || '(11) 99999-9999',
+          createdAt: user.created_at || new Date().toISOString()
+        };
+
+        const response = await api.post<{ message: string; user: User; token: string }>('/users/sync', {
+          id: userObj.id,
+          email: userObj.email,
+          name: userObj.name,
+          avatarUrl: userObj.avatarUrl,
+          phone: userObj.phone,
+          accessToken: session.access_token
+        });
+
+        if (response && response.token) {
+          localStorage.setItem('electromarket_token', response.token);
+        }
+
+        const finalUser = response?.user || userObj;
+        setCurrentUser(finalUser);
+        setUsers(prev => {
+          if (!prev.find(u => u.id === finalUser.id)) {
+            return [...prev, finalUser];
+          }
+          return prev;
+        });
+
+        setShowLoginModal(false);
+        setLoginEmail("");
+        setLoginPassword("");
+      }
+    } catch (err: any) {
+      console.error('Erro ao realizar login por e-mail/senha:', err);
+      setLoginError(err.message || 'Erro inesperado ao realizar login.');
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -3506,6 +3594,65 @@ export default function App() {
                 </svg>
                 <span>Continuar com o Google</span>
               </button>
+
+              {/* Divider */}
+              <div className="flex items-center gap-2 my-1">
+                <div className="h-px bg-slate-200 flex-1"></div>
+                <span className="text-[10px] font-bold text-slate-400 tracking-wider">OU USE SEU E-MAIL</span>
+                <div className="h-px bg-slate-200 flex-1"></div>
+              </div>
+
+              {/* Email / Password Form */}
+              <form onSubmit={handleEmailPasswordLogin} className="flex flex-col gap-4 text-left">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 text-left">
+                    E-mail
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="seu-email@dominio.com"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 text-left">
+                    Senha
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Sua senha"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#2563eb]"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loginLoading}
+                  className="w-full bg-[#2563eb] text-white hover:bg-blue-700 font-semibold py-2.5 px-4 rounded-xl text-sm transition shadow-sm cursor-pointer duration-150 active:scale-95 disabled:opacity-75 flex items-center justify-center gap-2"
+                >
+                  {loginLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Entrando...</span>
+                    </>
+                  ) : (
+                    <span>Entrar</span>
+                  )}
+                </button>
+
+                {loginError && (
+                  <p className="text-xs text-red-500 font-medium text-center bg-red-50 py-1.5 px-3 rounded-lg border border-red-100">
+                    {loginError}
+                  </p>
+                )}
+              </form>
             </div>
 
           </div>
