@@ -32,6 +32,20 @@ export interface Chat {
   sellerId: string;
   productId: string;
   createdAt: string;
+  buyer?: {
+    id: string;
+    name: string;
+    avatarUrl?: string | null;
+    phone?: string;
+    email?: string;
+  };
+  seller?: {
+    id: string;
+    name: string;
+    avatarUrl?: string | null;
+    phone?: string;
+    email?: string;
+  };
 }
 
 export interface Message {

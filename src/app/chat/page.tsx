@@ -341,7 +341,11 @@ export default function ChatPage() {
   // Determinar com quem o usuário está conversando (outro participante)
   const getOtherParticipant = (chat: ChatListItem) => {
     if (!user) return { name: 'Usuário', avatarUrl: '' };
-    return chat.buyerId === user.id ? chat.seller : chat.buyer;
+    const isBuyer = user.id === chat.buyerId;
+    const isSeller = user.id === chat.sellerId;
+    
+    const partner = isBuyer ? chat.seller : isSeller ? chat.buyer : (chat.seller || chat.buyer);
+    return partner || { name: 'Contato', avatarUrl: '', email: '', phone: '(11) 99999-9999' };
   };
 
   const otherUser = activeChat ? getOtherParticipant(activeChat) : null;

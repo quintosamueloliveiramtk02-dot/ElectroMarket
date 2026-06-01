@@ -96,12 +96,28 @@ export default function ChatWindow({
   // Helper to find the other user in the chat (Buyer vs Seller)
   const getChatPartner = (chat: Chat): User => {
     const isBuyer = currentUser?.id === chat.buyerId;
+    const isSeller = currentUser?.id === chat.sellerId;
+    
+    // First, try to retrieve from the actual populated objects in the chatRoom
+    const attachedPartner = isBuyer ? chat.seller : isSeller ? chat.buyer : (chat.seller || chat.buyer);
+    
+    if (attachedPartner) {
+      return {
+        id: attachedPartner.id,
+        name: attachedPartner.name || "Usuário",
+        email: attachedPartner.email || "",
+        phone: attachedPartner.phone || "(11) 99999-9999",
+        avatarUrl: attachedPartner.avatarUrl || defaultAvatar,
+        createdAt: ""
+      };
+    }
+
     const partnerId = isBuyer ? chat.sellerId : chat.buyerId;
     const partner = users.find(u => u.id === partnerId);
     
     return partner || {
       id: partnerId,
-      name: isBuyer ? "Vendedor" : "Comprador",
+      name: "Contato",
       email: "",
       phone: "(11) 99999-9999",
       avatarUrl: defaultAvatar,

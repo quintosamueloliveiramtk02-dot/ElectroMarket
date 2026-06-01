@@ -325,8 +325,12 @@ export default function ChatDetailPage() {
 
   // Helper resolving opponent contact object details
   const getOtherParticipant = (chat: ChatListItem) => {
-    if (!user) return { name: 'Comprador', avatarUrl: '' };
-    return chat.buyerId === user.id ? chat.seller : chat.buyer;
+    if (!user) return { name: 'Usuário', avatarUrl: '' };
+    const isBuyer = user.id === chat.buyerId;
+    const isSeller = user.id === chat.sellerId;
+    
+    const partner = isBuyer ? chat.seller : isSeller ? chat.buyer : (chat.seller || chat.buyer);
+    return partner || { name: 'Contato', avatarUrl: '', email: '', phone: '(11) 99999-9999' };
   };
 
   const otherUser = activeChat ? getOtherParticipant(activeChat) : null;
@@ -428,7 +432,7 @@ export default function ChatDetailPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-extrabold text-slate-800 truncate">
-                          {other?.name || 'Vendedor'}
+                          {other?.name || 'Contato'}
                         </span>
                         <span className="text-[9px] text-slate-400 font-sans uppercase">
                           {chat.product?.brand || 'Premium'}
@@ -483,7 +487,7 @@ export default function ChatDetailPage() {
               )}
 
               <div className="min-w-0">
-                <span className="text-xs font-black text-slate-900 block leading-tight">{otherUser?.name || 'Vendedor ElectroMarket'}</span>
+                <span className="text-xs font-black text-slate-900 block leading-tight">{otherUser?.name || 'Contato ElectroMarket'}</span>
                 <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block mt-0.5">Negociação Segura</span>
               </div>
             </div>
