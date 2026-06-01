@@ -2882,6 +2882,11 @@ export default function App() {
               <ProfilePage 
                 onBack={() => navigate("/")} 
                 onNavigate={(path) => navigate(path)}
+                currentUser={currentUser}
+                setCurrentUser={setCurrentUser}
+                onLogout={handleLogout}
+                onLoginClick={() => setShowLoginModal(true)}
+                onAnnounceClick={() => setShowAnnounceModal(true)}
               />
             </motion.div>
           ) : (
