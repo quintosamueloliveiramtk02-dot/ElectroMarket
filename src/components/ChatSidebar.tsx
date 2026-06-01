@@ -78,9 +78,14 @@ export default function ChatSidebar() {
           return (
             <div
               key={chat.id}
-              onClick={() => {
-                console.log("Sidebar click, navigating to:", `/chat/${chat.id}`);
-                router.push(`/chat/${chat.id}`);
+              onClick={(e) => {
+                e.stopPropagation();
+                const targetId = chat.id; // chat.id is sufficient based on interface
+                if (targetId) {
+                  window.location.href = `/chat/${targetId}`;
+                } else {
+                  console.error("ID do chat não encontrado:", chat);
+                }
               }}
               className="p-4 hover:bg-slate-50 cursor-pointer"
             >
