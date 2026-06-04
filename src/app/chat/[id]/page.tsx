@@ -90,7 +90,7 @@ export default function ChatDetailPage() {
     // Subscribe to realtime updates
     const channel = supabase
       .channel(`room_messages_${chatId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message', filter: `chatRoomId=eq.${chatId}` }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message', filter: `chatId=eq.${chatId}` }, (payload) => {
         setMessages((prev) => [...prev, payload.new]);
       })
       .subscribe();
@@ -99,6 +99,10 @@ export default function ChatDetailPage() {
       supabase.removeChannel(channel); 
     };
   }, [chatId]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
