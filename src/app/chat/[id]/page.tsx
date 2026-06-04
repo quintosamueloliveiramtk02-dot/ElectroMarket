@@ -75,7 +75,7 @@ export default function ChatDetailPage() {
     const fetchHistory = async () => {
       try {
         setLoadingMessages(true);
-        const data = await api.get<any>(`/chats/rooms/${chatId}/messages`);
+        const data = await api.get<any>(`/chats/${chatId}/messages`);
         const initialMessages = data?.messages || data || [];
         setMessages(initialMessages);
       } catch (err) {
@@ -90,7 +90,7 @@ export default function ChatDetailPage() {
     // Subscribe to realtime updates
     const channel = supabase
       .channel(`room_messages_${chatId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message', filter: `chatId=eq.${chatId}` }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message', filter: `chatRoomId=eq.${chatId}` }, (payload) => {
         setMessages((prev) => [...prev, payload.new]);
       })
       .subscribe();
