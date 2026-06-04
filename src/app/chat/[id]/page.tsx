@@ -95,8 +95,17 @@ export default function ChatDetailPage() {
       })
       .subscribe();
 
+    if (socketRef.current) {
+      socketRef.current.on('receive_message', (message) => {
+        setMessages((prev) => [...prev, message]);
+      });
+    }
+
     return () => { 
-      supabase.removeChannel(channel); 
+      supabase.removeChannel(channel);
+      if (socketRef.current) {
+        socketRef.current.off('receive_message');
+      }
     };
   }, [chatId]);
 
