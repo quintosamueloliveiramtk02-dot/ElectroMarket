@@ -89,7 +89,7 @@ export default function ChatSidebar() {
                 e.stopPropagation();
                 const targetId = chat.id || chat.chatRoomId || chat.roomId;
                 if (targetId) {
-                  router.replace(`/chat/${targetId}`, { scroll: false });
+                  router.push(`/chat/${targetId}`);
                 }
               }}
               className={`p-4 hover:bg-slate-50 cursor-pointer block border-b border-slate-100 ${isActive ? 'bg-blue-50 border-l-4 border-blue-600' : ''}`}
