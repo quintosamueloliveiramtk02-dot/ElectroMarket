@@ -34,7 +34,7 @@ interface ProductWithSeller extends Product {
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   
   const id = params?.id as string;
 
@@ -70,8 +70,8 @@ export default function ProductDetailPage() {
     if (!product) return;
 
     // Verificação se usuário está logado
-    if (!user) {
-      console.log('Usuário não logado. Redirecionando para login.');
+    if (!user || !token) {
+      console.log('Usuário não logado ou token ausente. Redirecionando para login.');
       router.push('/login');
       return;
     }
@@ -88,6 +88,8 @@ export default function ProductDetailPage() {
       const response = await api.post<{ id: string }>('/chats', {
         productId: product.id,
         sellerId: product.userId,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       console.log('Chat estabelecido com sucesso:', response.id);

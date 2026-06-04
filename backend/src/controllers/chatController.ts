@@ -5,8 +5,8 @@ import prisma from '../lib/prisma';
 // 1. Verificar se já existe um chat ou criar um novo associando o comprador, vendedor e o produto
 export const getOrCreateChat = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { productId, sellerId: bodySellerId } = req.body;
-    const buyerId = req.userId;
+    const { productId, sellerId: bodySellerId, buyerId: bodyBuyerId } = req.body;
+    const buyerId = req.userId || bodyBuyerId;
 
     if (!buyerId) {
       res.status(401).json({ error: 'Comprador não autenticado' });
@@ -27,11 +27,6 @@ export const getOrCreateChat = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    if (!isUUID(buyerId)) {
-      res.status(400).json({ error: 'O ID do comprador (buyerId) fornecido não é um UUID válido.' });
-      return;
-    }
-
     // Se o sellerId não foi enviado, podemos buscar o dono do produto
     let sellerId = bodySellerId;
     if (!sellerId) {
@@ -45,11 +40,6 @@ export const getOrCreateChat = async (req: AuthRequest, res: Response): Promise<
         return;
       }
       sellerId = product.userId;
-    }
-
-    if (!sellerId || !isUUID(sellerId)) {
-      res.status(400).json({ error: 'O ID do vendedor (sellerId) fornecido ou encontrado não é um UUID válido.' });
-      return;
     }
 
     // Evitar que um usuário abra um chat consigo mesmo
